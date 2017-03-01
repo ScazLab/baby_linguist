@@ -1,0 +1,5 @@
+[package]
+
+name = "baby_linguist"
+version = "0.0.1"
+authors = [ "Acshi Haggenmiller <acshikh@gmail.com>" ]
