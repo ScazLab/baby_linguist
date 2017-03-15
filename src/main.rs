@@ -1,10 +1,13 @@
 extern crate image;
+extern crate time;
 
 //use std::fs::File;
 use std::path::Path;
 use std::f32;
+use std::io::Write;
 
 use image::GenericImage;
+use image::DynamicImage;
 
 fn rgb_to_yuv(r: u8, g: u8, b: u8) -> (u8, u8, u8) {
     let (rf, gf, bf) = (r as f32, g as f32, b as f32);
@@ -24,8 +27,8 @@ fn is_skin(r: u8, g: u8, b: u8) -> bool {
           (r as i16 - g as i16).abs() > 15;
 }
 
-fn convolve(in_img: &[f32], img_width: u32, kernel: &[f32], kernel_width: u32, out_img: &mut Vec<f32>) {
-    let img_height = in_img.len() as u32 / img_width;
+fn convolve(in_image: &[f32], img_width: u32, kernel: &[f32], kernel_width: u32, out_image: &mut Vec<f32>) {
+    let img_height = in_image.len() as u32 / img_width;
     let kernel_height = kernel.len() as u32 / kernel_width;
 
     assert!(kernel_width % 2 == 1);
@@ -43,11 +46,11 @@ fn convolve(in_img: &[f32], img_width: u32, kernel: &[f32], kernel_width: u32, o
             let mut kernel_index: usize = 0;
             for kernel_y in -(half_k_height as i32)..(half_k_height + 1) as i32 {
                 for kernel_x in -(half_k_width as i32)..(half_k_width + 1) as i32 {
-                    value += in_img[((y - kernel_y) * img_width as i32 + (x - kernel_x)) as usize] * kernel[kernel_index];
+                    value += in_image[((y - kernel_y) * img_width as i32 + (x - kernel_x)) as usize] * kernel[kernel_index];
                     kernel_index += 1;
                 }
             }
-            out_img[img_index] = value;
+            out_image[img_index] = value;
             img_index += 1;
         }
 
@@ -71,31 +74,124 @@ fn gaussian_kernel(sigma: f32) -> (Vec<f32>, u32) {
     return (kernel, dim);
 }
 
-fn main() {
-    //let (y, u, v) = rgb_to_yuv(50, 100, 200);
-    //println!("Y: {} U: {} V: {}\n", y, u, v);
-    let input_image = image::open(&Path::new("babysleeves.jpg")).unwrap();
-    let (width, height) = input_image.dimensions();
-    let mut output_buffer = Vec::<u8>::with_capacity((width * height * 3) as usize);
+fn benchmark<F: FnMut()>(name: &str, mut f: F) -> f64 {
+    let start = time::precise_time_s();
+    let mut repeat_number = 1;
+    let mut total_runs = 0;
+    while time::precise_time_s() - start < 2.0 {
+        for _ in 0..repeat_number {
+            f();
+            total_runs += 1;
+        }
+        repeat_number *= 2;
+    }
+    let total_time = time::precise_time_s() - start;
+    let time_each = total_time / total_runs as f64;
+    println!("{} took: {:.4} seconds per call", name, time_each);
+    return time_each;
+}
 
+fn bench_skin_threshold() {
+    let input_img = image::open(&Path::new("babysleeves.jpg")).unwrap();
+    let (width, height) = input_img.dimensions();
     let mut grey_buffer = Vec::<f32>::with_capacity((width * height) as usize);
 
-    for (_, _, pixel) in input_image.pixels() {
-        let (r, g, b) = (pixel.data[0], pixel.data[1], pixel.data[2]);
-        if is_skin(r, g, b) {
-            output_buffer.push(r);
-            output_buffer.push(g);
-            output_buffer.push(b);
-
-            grey_buffer.push(1.0);
-        } else {
-            output_buffer.push(0);
-            output_buffer.push(0);
-            output_buffer.push(0);
-
-            grey_buffer.push(r as f32 / 255.0);
+    benchmark("Skin thresholding 1", || {
+        grey_buffer.clear();
+        for (_, _, pixel) in input_img.pixels() {
+            let (r, g, b) = (pixel.data[0], pixel.data[1], pixel.data[2]);
+            if is_skin(r, g, b) {
+                grey_buffer.push(1.0);
+            } else {
+                grey_buffer.push(0.0);
+            }
         }
+    });
+
+    benchmark("Skin thresholding 2", || {
+        let mut out_index = 0;
+        for (_, _, pixel) in input_img.pixels() {
+            let (r, g, b) = (pixel.data[0], pixel.data[1], pixel.data[2]);
+            if is_skin(r, g, b) {
+                grey_buffer[out_index] = 1.0;
+            } else {
+                grey_buffer[out_index] = 0.0;
+            }
+            out_index += 1;
+        }
+    });
+
+    benchmark("Skin thresholding 3", || {
+        let mut out_index = 0;
+        for (_, _, pixel) in input_img.pixels() {
+            let (r, g, b) = (pixel.data[0], pixel.data[1], pixel.data[2]);
+            grey_buffer[out_index] = if is_skin(r, g, b) { 1.0 } else { 0.0 };
+            out_index += 1;
+        }
+    });
+
+    if let DynamicImage::ImageRgb8(rgb_img) = input_img {
+        let rgb_buffer = rgb_img.into_raw();
+        benchmark("Skin thresholding 4", || {
+            let mut in_index = 0;
+            for i in 0..(width * height) as usize {
+                let (r, g, b) = (rgb_buffer[in_index], rgb_buffer[in_index + 1], rgb_buffer[in_index + 2]);
+                grey_buffer[i] = if is_skin(r, g, b) { 1.0 } else { 0.0 };
+                in_index += 3;
+            }
+        });
+    } else {
+        writeln!(&mut std::io::stderr(), "Error: The input image was not RGB8! Uh oh...").unwrap();
     }
+}
+
+fn skin_threshold(input_img: DynamicImage, grey_buffer: &mut Vec<f32>) {
+    let (width, height) = input_img.dimensions();
+    let len = (width * height) as usize;
+    grey_buffer.reserve(len);
+    unsafe {
+        grey_buffer.set_len(len);
+    }
+
+    if let DynamicImage::ImageRgb8(rgb_img) = input_img {
+        let rgb_buffer = rgb_img.into_raw();
+        let mut in_index = 0;
+        for i in 0..len {
+            let (r, g, b) = (rgb_buffer[in_index], rgb_buffer[in_index + 1], rgb_buffer[in_index + 2]);
+            grey_buffer[i] = if is_skin(r, g, b) { 1.0 } else { 0.0 };
+            in_index += 3;
+        }
+    } else {
+        panic!("Error: Input image must be RGB8!");
+    }
+}
+
+fn write_grey_image(filename: &str, grey_img: &[f32], img_width: u32) {
+    let len = grey_img.len();
+    let img_height = len as u32 / img_width;
+    let mut u8_buffer = Vec::<u8>::with_capacity(len);
+    unsafe {
+        u8_buffer.set_len(len);
+    }
+
+    for i in 0..len {
+        u8_buffer[i] = (grey_img[i] * 255.0) as u8;
+    }
+
+    image::save_buffer(&Path::new(filename), &u8_buffer[..], img_width, img_height, image::Gray(8)).unwrap();
+}
+
+fn main() {
+    //bench_skin_threshold();
+    //return;
+
+    //let (y, u, v) = rgb_to_yuv(50, 100, 200);
+    //println!("Y: {} U: {} V: {}\n", y, u, v);
+    let input_img = image::open(&Path::new("babysleeves.jpg")).unwrap();
+    let (width, height) = input_img.dimensions();
+
+    let mut grey_buffer = Vec::<f32>::with_capacity((width * height) as usize);
+    skin_threshold(input_img, &mut grey_buffer);
 
     let mut smooth_buffer = Vec::<f32>::with_capacity((width * height) as usize);
     unsafe {
@@ -105,27 +201,10 @@ fn main() {
 
     let (kernel, kernel_dim) = gaussian_kernel(2.0);
 
-    /*for i in 0..kernel.len() as usize {
-        print!("{}, ", kernel[i]);
-    }*/
-
     convolve(&grey_buffer[..], width, &kernel[..], kernel_dim, &mut smooth_buffer);
 
-    let mut smooth_u8_buffer = Vec::<u8>::with_capacity((width * height) as usize);
-    let mut grey_u8_buffer = Vec::<u8>::with_capacity((width * height) as usize);
-
-    for i in 0..(width * height) as usize {
-        smooth_u8_buffer.push((smooth_buffer[i] * 255.0) as u8);
-        grey_u8_buffer.push((grey_buffer[i] * 255.0) as u8);
-    }
-
-    image::save_buffer(&Path::new("babysleeves_greyskin.png"), &grey_u8_buffer[..], width, height, image::Gray(8)).unwrap();
-
-    let res = image::save_buffer(&Path::new("babysleeves_smooth.png"), &smooth_u8_buffer[..], width, height, image::Gray(8));
-    match res {
-        Ok(v) => println!("Writing the file worked!"),
-        Err(e) => println!("Error writing image: {:?}", e),
-    }
+    write_grey_image("babysleeves_greyskin.png", &grey_buffer[..], width);
+    write_grey_image("babysleeves_smooth.png", &smooth_buffer[..], width);
 
     println!("Done!");
 }
