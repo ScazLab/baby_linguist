@@ -27,8 +27,15 @@ fn is_skin(r: u8, g: u8, b: u8) -> bool {
           (r as i16 - g as i16).abs() > 15;
 }
 
-fn convolve(in_image: &[f32], img_width: u32, kernel: &[f32], kernel_width: u32, out_image: &mut Vec<f32>) {
-    let img_height = in_image.len() as u32 / img_width;
+fn convolve(in_img: &[f32], img_width: u32, kernel: &[f32], kernel_width: u32, out_img: &mut Vec<f32>) {
+    // Guarentee space in and prepare the output buffer
+    let img_len = in_img.len();
+    out_img.reserve(img_len);
+    unsafe {
+        out_img.set_len(img_len);
+    }
+
+    let img_height = img_len as u32 / img_width;
     let kernel_height = kernel.len() as u32 / kernel_width;
 
     assert!(kernel_width % 2 == 1);
@@ -37,24 +44,33 @@ fn convolve(in_image: &[f32], img_width: u32, kernel: &[f32], kernel_width: u32,
     let half_k_width = kernel_width / 2;
     let half_k_height = kernel_height / 2;
 
+    // This index points to the current pixel we want to output
+    // for simplicity, we completely skip border pixels where the kernel
+    // would not be completely within the image.
     let mut img_index: usize = (half_k_height * img_width) as usize;
     for y in half_k_height as i32..(img_height - half_k_height) as i32 {
-        img_index += half_k_width as usize;
-
+        img_index += half_k_width as usize; // skip left border
         for x in half_k_width as i32..(img_width - half_k_width) as i32 {
             let mut value: f32 = 0.0;
             let mut kernel_index: usize = 0;
-            for kernel_y in -(half_k_height as i32)..(half_k_height + 1) as i32 {
-                for kernel_x in -(half_k_width as i32)..(half_k_width + 1) as i32 {
-                    value += in_image[((y - kernel_y) * img_width as i32 + (x - kernel_x)) as usize] * kernel[kernel_index];
+            // We start with the top-left corner of the kernel
+            // and thus with the bottom-right corner of the image
+            // We start just at an extra +1 x and y since we reduce the index before using it.
+            let mut in_index = img_index + ((half_k_height + 1) * img_width + half_k_width + 1) as usize;
+            for _ in 0..kernel_height as i32 {
+                in_index -= img_width as usize;
+                for _ in 0..kernel_width as i32 {
+                    in_index -= 1;
+                    value += in_img[in_index] * kernel[kernel_index];
                     kernel_index += 1;
                 }
+                in_index += kernel_width as usize; // rewind the input image index back to the right edge
             }
-            out_image[img_index] = value;
+            out_img[img_index] = value;
             img_index += 1;
         }
 
-        img_index += half_k_width as usize;
+        img_index += half_k_width as usize; // skip right border
     }
 }
 
@@ -62,12 +78,19 @@ fn gaussian_kernel(sigma: f32) -> (Vec<f32>, u32) {
     let half_dim = f32::round(3.0 * sigma) as i32;
     let dim = (half_dim * 2 + 1) as u32;
 
-    let mut kernel = Vec::<f32>::with_capacity((dim * dim) as usize);
+    let len = (dim * dim) as usize;
+    let mut kernel = Vec::<f32>::with_capacity(len);
+    unsafe {
+        kernel.set_len(len);
+    }
+
+    let mut kernel_index = 0;
     let scalar1: f32 = 1.0 / (2.0 * f32::consts::PI * sigma * sigma);
     let scalar2: f32 = 1.0 / (2.0 * sigma * sigma);
     for y in -half_dim..(half_dim + 1) {
         for x in -half_dim..(half_dim + 1) {
-            kernel.push(scalar1 * f32::exp(-((x * x + y * y) as f32) * scalar2));
+            kernel[kernel_index] = scalar1 * f32::exp(-((x * x + y * y) as f32) * scalar2);
+            kernel_index += 1;
         }
     }
 
@@ -145,6 +168,88 @@ fn bench_skin_threshold() {
     }
 }
 
+fn bench_convolve() {
+    let base_img = image::open(&Path::new("babysleeves.jpg")).unwrap();
+    let (width, height) = base_img.dimensions();
+
+    let mut in_img = Vec::<f32>::with_capacity((width * height) as usize);
+    skin_threshold(base_img, &mut in_img);
+
+    let mut out_img = Vec::<f32>::with_capacity((width * height) as usize);
+    let (kernel, kernel_dim) = gaussian_kernel(2.0);
+
+    let img_len = in_img.len();
+    out_img.reserve(img_len);
+    unsafe {
+        out_img.set_len(img_len);
+    }
+
+    let img_width = width;
+    let kernel_width = kernel_dim;
+
+    let img_height = img_len as u32 / img_width;
+    let kernel_height = kernel.len() as u32 / kernel_width;
+
+    assert!(kernel_width % 2 == 1);
+    assert!(kernel_height % 2 == 1);
+
+    let half_k_width = kernel_width / 2;
+    let half_k_height = kernel_height / 2;
+
+    benchmark("Convolve 1", || {
+        let mut img_index: usize = (half_k_height * img_width) as usize;
+        for y in half_k_height as i32..(img_height - half_k_height) as i32 {
+            img_index += half_k_width as usize;
+
+            for x in half_k_width as i32..(img_width - half_k_width) as i32 {
+                let mut value: f32 = 0.0;
+                let mut kernel_index: usize = 0;
+                for kernel_y in -(half_k_height as i32)..(half_k_height + 1) as i32 {
+                    for kernel_x in -(half_k_width as i32)..(half_k_width + 1) as i32 {
+                        value += in_img[((y - kernel_y) * img_width as i32 + (x - kernel_x)) as usize] * kernel[kernel_index];
+                        kernel_index += 1;
+                    }
+                }
+                out_img[img_index] = value;
+                img_index += 1;
+            }
+
+            img_index += half_k_width as usize;
+        }
+    });
+
+    benchmark("Convolve 2", || {
+        // This index points to the current pixel we want to output
+        // for simplicity, we completely skip border pixels where the kernel
+        // would not be completely within the image.
+        let mut img_index: usize = (half_k_height * img_width) as usize;
+        for y in half_k_height as i32..(img_height - half_k_height) as i32 {
+            img_index += half_k_width as usize; // skip left border
+            for x in half_k_width as i32..(img_width - half_k_width) as i32 {
+                let mut value: f32 = 0.0;
+                let mut kernel_index: usize = 0;
+                // We start with the top-left corner of the kernel
+                // and thus with the bottom-right corner of the image
+                // We start just at an extra +1 x and y since we reduce the index before using it.
+                let mut in_index = img_index + ((half_k_height + 1) * img_width + half_k_width + 1) as usize;
+                for _ in 0..kernel_height as i32 {
+                    in_index -= img_width as usize;
+                    for _ in 0..kernel_width as i32 {
+                        in_index -= 1;
+                        value += in_img[in_index] * kernel[kernel_index];
+                        kernel_index += 1;
+                    }
+                    in_index += kernel_width as usize; // rewind the input image index back to the right edge
+                }
+                out_img[img_index] = value;
+                img_index += 1;
+            }
+
+            img_index += half_k_width as usize; // skip right border
+        }
+    });
+}
+
 fn skin_threshold(input_img: DynamicImage, grey_buffer: &mut Vec<f32>) {
     let (width, height) = input_img.dimensions();
     let len = (width * height) as usize;
@@ -182,11 +287,9 @@ fn write_grey_image(filename: &str, grey_img: &[f32], img_width: u32) {
 }
 
 fn main() {
-    //bench_skin_threshold();
+    //bench_convolve();
     //return;
 
-    //let (y, u, v) = rgb_to_yuv(50, 100, 200);
-    //println!("Y: {} U: {} V: {}\n", y, u, v);
     let input_img = image::open(&Path::new("babysleeves.jpg")).unwrap();
     let (width, height) = input_img.dimensions();
 
@@ -194,13 +297,7 @@ fn main() {
     skin_threshold(input_img, &mut grey_buffer);
 
     let mut smooth_buffer = Vec::<f32>::with_capacity((width * height) as usize);
-    unsafe {
-        let cap = smooth_buffer.capacity();
-        smooth_buffer.set_len(cap);
-    }
-
     let (kernel, kernel_dim) = gaussian_kernel(2.0);
-
     convolve(&grey_buffer[..], width, &kernel[..], kernel_dim, &mut smooth_buffer);
 
     write_grey_image("babysleeves_greyskin.png", &grey_buffer[..], width);
