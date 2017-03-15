@@ -97,6 +97,26 @@ fn gaussian_kernel(sigma: f32) -> (Vec<f32>, u32) {
     return (kernel, dim);
 }
 
+fn gaussian_kernel_2d(sigma: f32) -> (Vec<f32>, u32) {
+    let half_dim = f32::round(3.0 * sigma) as i32;
+    let dim = (half_dim * 2 + 1) as u32;
+
+    let mut kernel = Vec::<f32>::with_capacity(dim as usize);
+    unsafe {
+        kernel.set_len(dim as usize);
+    }
+
+    let mut kernel_index = 0;
+    let scalar1: f32 = 1.0 / (f32::sqrt(2.0 * f32::consts::PI) * sigma);
+    let scalar2: f32 = 1.0 / (2.0 * sigma * sigma);
+    for x in -half_dim..(half_dim + 1) {
+        kernel[kernel_index] = scalar1 * f32::exp(-((x * x) as f32) * scalar2);
+        kernel_index += 1;
+    }
+
+    return (kernel, dim);
+}
+
 fn benchmark<F: FnMut()>(name: &str, mut f: F) -> f64 {
     let start = time::precise_time_s();
     let mut repeat_number = 1;
@@ -296,9 +316,14 @@ fn main() {
     let mut grey_buffer = Vec::<f32>::with_capacity((width * height) as usize);
     skin_threshold(input_img, &mut grey_buffer);
 
+    let mut smooth_buffer_intermediate = Vec::<f32>::with_capacity((width * height) as usize);
     let mut smooth_buffer = Vec::<f32>::with_capacity((width * height) as usize);
-    let (kernel, kernel_dim) = gaussian_kernel(2.0);
-    convolve(&grey_buffer[..], width, &kernel[..], kernel_dim, &mut smooth_buffer);
+    let (kernel_2d, kernel_dim) = gaussian_kernel_2d(20.0);
+    // The gaussian filter is separable, so we compute it in separate x and y steps
+    // X step
+    convolve(&grey_buffer[..], width, &kernel_2d[..], kernel_dim, &mut smooth_buffer_intermediate);
+    // Y step
+    convolve(&smooth_buffer_intermediate[..], width, &kernel_2d[..], 1, &mut smooth_buffer);
 
     write_grey_image("babysleeves_greyskin.png", &grey_buffer[..], width);
     write_grey_image("babysleeves_smooth.png", &smooth_buffer[..], width);
