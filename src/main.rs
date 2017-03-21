@@ -26,58 +26,12 @@ fn is_skin(r: u8, g: u8, b: u8) -> bool {
           (r as i16 - g as i16).abs() > 15;
 }
 
-fn convolve(in_img: &[f32], img_width: u32, kernel: &[f32], kernel_width: u32, out_img: &mut Vec<f32>) {
-    // Guarentee space in and prepare the output buffer
-    let img_len = in_img.len();
-    out_img.reserve(img_len);
-    unsafe {
-        out_img.set_len(img_len);
-    }
-
-    let img_height = img_len as u32 / img_width;
-    let kernel_height = kernel.len() as u32 / kernel_width;
-
-    assert!(kernel_width % 2 == 1);
-    assert!(kernel_height % 2 == 1);
-
-    let half_k_width = kernel_width / 2;
-    let half_k_height = kernel_height / 2;
-
-    // This index points to the current pixel we want to output
-    // for simplicity, we completely skip border pixels where the kernel
-    // would not be completely within the image.
-    let mut img_index: usize = (half_k_height * img_width) as usize;
-    for _ in half_k_height as i32..(img_height - half_k_height) as i32 {
-        img_index += half_k_width as usize; // skip left border
-        for _ in half_k_width as i32..(img_width - half_k_width) as i32 {
-            let mut value: f32 = 0.0;
-            let mut kernel_index: usize = 0;
-            // We start with the top-left corner of the kernel
-            // and thus with the bottom-right corner of the image
-            // We start just at an extra +1 x and y since we reduce the index before using it.
-            let mut in_index = img_index + ((half_k_height + 1) * img_width + half_k_width + 1) as usize;
-            for _ in 0..kernel_height as i32 {
-                in_index -= img_width as usize;
-                for _ in 0..kernel_width as i32 {
-                    in_index -= 1;
-                    value += in_img[in_index] * kernel[kernel_index];
-                    kernel_index += 1;
-                }
-                in_index += kernel_width as usize; // rewind the input image index back to the right edge
-            }
-            out_img[img_index] = value;
-            img_index += 1;
-        }
-
-        img_index += half_k_width as usize; // skip right border
-    }
-}
-
 // Approximation for a gaussian blur based on http://blog.ivank.net/fastest-gaussian-blur.html
 // Original code is MIT licenced
 // The idea is to use a series of moving average filters.
 // Because the coefficient is identical for each element, you can use an accumulator
 // and thus the overall time complexity is just O(n) in the number of pixels.
+// Please note that we do modify the input_img buffer!
 fn gaussian_box_blur(sigma: f32, input_img: &mut Vec<f32>, width: u32, output_img: &mut Vec<f32>) {
     // prepare the output buffer
     let len = input_img.len();
@@ -198,26 +152,6 @@ fn box_blur_sizes(sigma: f32) -> [usize; 3] {
         sizes[i] = if i < mean { width_low } else { width_high };
     }
     return sizes;
-}
-
-fn gaussian_kernel_2d(sigma: f32) -> (Vec<f32>, u32) {
-    let half_dim = f32::round(3.0 * sigma) as i32;
-    let dim = (half_dim * 2 + 1) as u32;
-
-    let mut kernel = Vec::<f32>::with_capacity(dim as usize);
-    unsafe {
-        kernel.set_len(dim as usize);
-    }
-
-    let mut kernel_index = 0;
-    let scalar1: f32 = 1.0 / (f32::sqrt(2.0 * f32::consts::PI) * sigma);
-    let scalar2: f32 = 1.0 / (2.0 * sigma * sigma);
-    for x in -half_dim..(half_dim + 1) {
-        kernel[kernel_index] = scalar1 * f32::exp(-((x * x) as f32) * scalar2);
-        kernel_index += 1;
-    }
-
-    return (kernel, dim);
 }
 
 fn benchmark<F: FnMut()>(name: &str, mut f: F) -> f64 {
