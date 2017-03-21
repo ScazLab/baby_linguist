@@ -48,6 +48,20 @@ fn gaussian_box_blur(sigma: f32, input_img: &mut Vec<f32>, width: u32, output_im
     box_blur_pass(input_img, output_img, width as usize, height, sizes[2]);
 }
 
+fn diff_of_gaussians(sigma: f32, k: f32,  input_img: &mut Vec<f32>, width: u32, output_img: &mut Vec<f32>){
+    let mut smooth_buffer_2 = Vec::<f32>::with_capacity(output_img.len());
+    unsafe {
+        smooth_buffer_2.set_len(output_img.len());
+    }
+
+    gaussian_box_blur(sigma,input_img,width,&mut smooth_buffer_2);
+    gaussian_box_blur(sigma*k,input_img,width,output_img);
+
+    for i in 0..output_img.len(){
+        output_img[i]= (output_img[i] - smooth_buffer_2[i]).abs();
+    }
+}
+
 fn box_blur_pass(v_in: &mut Vec<f32>,
                  v_out: &mut Vec<f32>,
                  width: usize,
@@ -190,25 +204,37 @@ fn benchmark<F: FnMut()>(name: &str, mut f: F) -> f64 {
 fn find_local_maxima(in_img: &[f32], img_width: u32) -> Vec<(usize, usize)> {
     let img_height = in_img.len() / img_width as usize;
     let mut local_maxima = Vec::<(usize, usize)>::new();
+    let mut global_max = 0.0;
+    let (mut g_x,  mut  g_y) = (0,0);
 
     'outer: for y in 1..img_height - 1 {
         'inner: for x in 1..(img_width - 1) as usize {
-            let curr_index = x * img_width as usize + y;
+            let curr_index = x + y * img_width as usize ;
             let curr_pixel = in_img[curr_index];
+            if curr_pixel > global_max{
+                global_max = curr_pixel;
+                g_x = x;
+                g_y = y;
+            }
+            let mut adj_pixels = Vec::<f32>::new();
             // Heres a heuristic im pulling out of my a**.
             // we dont want to check that every pixel is a
             // local max
-            if curr_pixel > 0.9 {
+            if curr_pixel > 0.3{
                 for adj_y in -1..2 as i32 {
                     for adj_x in -1..2 as i32 {
-                        if curr_pixel >
-                           in_img[((x as i32 + adj_x) * img_width as i32 +
-                                   (y as i32 + adj_y)) as usize] {
+                        let adj_pixel =  in_img[((x as i32 + adj_x) +
+                                                 (y as i32 + adj_y) * img_width as i32 ) as usize];
+                        adj_pixels.push(adj_pixel);
+                        if curr_pixel < adj_pixel
+                          {
                             // not the local max so lets move on
+                            //println!("curr pixel: {}, larger pixel: {}\n", curr_pixel, adj_pixel);
                             continue 'inner;
                         }
                     }
                 }
+                println!("local max: {}, adj_pixels {:?}\n", curr_pixel,adj_pixels);
                 local_maxima.push((x, y));
             }
         }
@@ -217,6 +243,8 @@ fn find_local_maxima(in_img: &[f32], img_width: u32) -> Vec<(usize, usize)> {
     // // Prints 3, 2, 1
     //     println!("{}", in_img[top]);
     // }
+    println!("global max: {}\n", global_max);
+    //local_maxima.push((g_x,g_y));
     return local_maxima;
 
 }
@@ -268,11 +296,16 @@ fn write_grey_image(filename: &str, grey_img: &[f32], img_width: u32) {
 
 fn draw_circles(maxima: &[(usize, usize)], radius: u32, in_img: &mut Vec<f32>, img_width: u32) {
     let height = in_img.len() / img_width as usize;
-    let mut x = radius as usize;
-    let mut y = 0 as usize;
     let width = img_width as usize;
+    let mut count = 0;
 
     for m in maxima {
+
+        let mut x = radius as usize;
+        let mut y = 0 as usize;
+
+        println!("loop: {}\n", count);
+        count+=1;
         let (x0, y0) = *m;
         let mut err = 0 as i32;
 
@@ -283,11 +316,11 @@ fn draw_circles(maxima: &[(usize, usize)], radius: u32, in_img: &mut Vec<f32>, i
             println!("x: {},y: {},err: {}\n", x, y, err);
             let i1 = x0 + y;
             let i2 = y0 + x;
-            let i3 = x0 - y;
-            let i4 = x0 - x;
+            let i3 = if x0 > y {x0 - y} else{0};
+            let i4 = if x0 > x {x0 - x} else{0};
             let i5 = y0 + y;
-            let i6 = y0 - x;
-            let i7 = y0 - y;
+            let i6 = if y0 > x {y0 - x} else{0};
+            let i7 = if y0 > y {y0 - y} else{0};
             let i8 = x0 + x;
 
             if i8 < width && i5 < height {
@@ -342,17 +375,19 @@ fn main() {
 
     //let mut smooth_buffer_intermediate = Vec::<f32>::with_capacity((width * height) as usize);
     let mut smooth_buffer = Vec::<f32>::with_capacity((width * height) as usize);
-    gaussian_box_blur(sigma, &mut grey_buffer, width, &mut smooth_buffer);
+    //gaussian_box_blur(sigma, &mut grey_buffer, width, &mut smooth_buffer);
+    diff_of_gaussians(sigma, 1.6, &mut grey_buffer, width, &mut smooth_buffer);
 
     // Find and label the maxima in the smoothed image
     let maxima = find_local_maxima(&mut smooth_buffer, width);
+    println!("num of local maxima: {}\n",maxima.len());
     let feature_radius = (1.414 * sigma) as u32;
     draw_circles(&maxima[..], feature_radius, &mut smooth_buffer, width);
 
     let total_seconds = time::precise_time_s() - start;
 
     //write_grey_image("babysleeves_greyskin.png", &grey_buffer[..], width);
-    write_grey_image("babysleeves_smooth.png", &smooth_buffer[..], width);
+    write_grey_image("babysleeves_DoG.png", &smooth_buffer[..], width);
 
     println!("Done! Processing time took: {:.4} seconds", total_seconds);
 }
