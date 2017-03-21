@@ -1,7 +1,6 @@
 extern crate image;
 extern crate time;
 
-//use std::fs::File;
 use std::path::Path;
 use std::f32;
 
@@ -16,14 +15,16 @@ fn rgb_to_yuv(r: u8, g: u8, b: u8) -> (u8, u8, u8) {
     return (y as u8, u as u8, v as u8);
 }
 
+// From Skin Segmentation Using YUV and RGB Color Spaces
+// Zaher Hamid Al-Tairi, Rahmita Wirza Rahmat, M. Iqbal Saripan, and
+// Puteri Suhaiza Sulaiman
+// J Inf Process Syst, Vol.10, No.2, pp.283~299, June 2014
+// http://dx.doi.org/10.3745/JIPS.02.0002
 fn is_skin(r: u8, g: u8, b: u8) -> bool {
     let (_, u, v) = rgb_to_yuv(r, g, b);
 
-    return u > 80 && u < 130 &&
-           v > 136 && v < 200 &&
-           v > u &&
-           r > 80 && g > 30 && b > 15 &&
-          (r as i16 - g as i16).abs() > 15;
+    return u > 80 && u < 130 && v > 136 && v < 200 && v > u && r > 80 && g > 30 && b > 15 &&
+           (r as i16 - g as i16).abs() > 15;
 }
 
 // Approximation for a gaussian blur based on http://blog.ivank.net/fastest-gaussian-blur.html
@@ -47,13 +48,21 @@ fn gaussian_box_blur(sigma: f32, input_img: &mut Vec<f32>, width: u32, output_im
     box_blur_pass(input_img, output_img, width as usize, height, sizes[2]);
 }
 
-fn box_blur_pass(v_in: &mut Vec<f32>, v_out: &mut Vec<f32>, width: usize, height: usize, radius: usize) {
+fn box_blur_pass(v_in: &mut Vec<f32>,
+                 v_out: &mut Vec<f32>,
+                 width: usize,
+                 height: usize,
+                 radius: usize) {
     v_out.copy_from_slice(&v_in[..]);
     box_blur_x(v_out, v_in, width, height, radius);
     box_blur_y(v_in, v_out, width, height, radius);
 }
 
-fn box_blur_x(v_in: &mut Vec<f32>, v_out: &mut Vec<f32>, width: usize, height: usize, radius: usize) {
+fn box_blur_x(v_in: &mut Vec<f32>,
+              v_out: &mut Vec<f32>,
+              width: usize,
+              height: usize,
+              radius: usize) {
     let factor = 1.0 / (radius + radius + 1) as f32;
 
     let mut index: usize = 0;
@@ -94,7 +103,11 @@ fn box_blur_x(v_in: &mut Vec<f32>, v_out: &mut Vec<f32>, width: usize, height: u
     }
 }
 
-fn box_blur_y(v_in: &mut Vec<f32>, v_out: &mut Vec<f32>, width: usize, height: usize, radius: usize) {
+fn box_blur_y(v_in: &mut Vec<f32>,
+              v_out: &mut Vec<f32>,
+              width: usize,
+              height: usize,
+              radius: usize) {
     let factor = 1.0 / (radius + radius + 1) as f32;
 
     for x in 0..width {
@@ -146,7 +159,10 @@ fn box_blur_sizes(sigma: f32) -> [usize; 3] {
     }
     let width_high = width_low + 2;
 
-    let mean_ideal = (12.0 * sigma * sigma - (num_passes * width_low * width_low) as f32 - 4.0 * (num_passes * width_low) as f32 - 3.0 * num_passes as f32) / (-4.0 * width_low as f32 - 4.0);
+    let mean_ideal = (12.0 * sigma * sigma - (num_passes * width_low * width_low) as f32 -
+                      4.0 * (num_passes * width_low) as f32 -
+                      3.0 * num_passes as f32) /
+                     (-4.0 * width_low as f32 - 4.0);
     let mean = f32::round(mean_ideal) as usize;
     for i in 0..num_passes {
         sizes[i] = if i < mean { width_low } else { width_high };
@@ -171,6 +187,40 @@ fn benchmark<F: FnMut()>(name: &str, mut f: F) -> f64 {
     return time_each;
 }
 
+fn find_local_maxima(in_img: &[f32], img_width: u32) -> Vec<(usize, usize)> {
+    let img_height = in_img.len() / img_width as usize;
+    let mut local_maxima = Vec::<(usize, usize)>::new();
+
+    'outer: for y in 1..img_height - 1 {
+        'inner: for x in 1..(img_width - 1) as usize {
+            let curr_index = x * img_width as usize + y;
+            let curr_pixel = in_img[curr_index];
+            // Heres a heuristic im pulling out of my a**.
+            // we dont want to check that every pixel is a
+            // local max
+            if curr_pixel > 0.9 {
+                for adj_y in -1..2 as i32 {
+                    for adj_x in -1..2 as i32 {
+                        if curr_pixel >
+                           in_img[((x as i32 + adj_x) * img_width as i32 +
+                                   (y as i32 + adj_y)) as usize] {
+                            // not the local max so lets move on
+                            continue 'inner;
+                        }
+                    }
+                }
+                local_maxima.push((x, y));
+            }
+        }
+    }
+    // while let Some(top) = local_maxima.pop() {
+    // // Prints 3, 2, 1
+    //     println!("{}", in_img[top]);
+    // }
+    return local_maxima;
+
+}
+
 fn skin_threshold(input_img: DynamicImage, grey_buffer: &mut Vec<f32>) {
     let (width, height) = input_img.dimensions();
     let len = (width * height) as usize;
@@ -183,7 +233,8 @@ fn skin_threshold(input_img: DynamicImage, grey_buffer: &mut Vec<f32>) {
         let rgb_buffer = rgb_img.into_raw();
         let mut in_index = 0;
         for i in 0..len {
-            let (r, g, b) = (rgb_buffer[in_index], rgb_buffer[in_index + 1], rgb_buffer[in_index + 2]);
+            let (r, g, b) =
+                (rgb_buffer[in_index], rgb_buffer[in_index + 1], rgb_buffer[in_index + 2]);
             grey_buffer[i] = if is_skin(r, g, b) { 1.0 } else { 0.0 };
             in_index += 3;
         }
@@ -204,7 +255,78 @@ fn write_grey_image(filename: &str, grey_img: &[f32], img_width: u32) {
         u8_buffer[i] = (grey_img[i] * 255.0) as u8;
     }
 
-    image::save_buffer(&Path::new(filename), &u8_buffer[..], img_width, img_height, image::Gray(8)).unwrap();
+    image::save_buffer(&Path::new(filename),
+                       &u8_buffer[..],
+                       img_width,
+                       img_height,
+                       image::Gray(8))
+            .unwrap();
+}
+
+// This is the midpoint circle alg:
+// https://en.wikipedia.org/wiki/Midpoint_circle_algorithm
+
+fn draw_circles(maxima: &[(usize, usize)], radius: u32, in_img: &mut Vec<f32>, img_width: u32) {
+    let height = in_img.len() / img_width as usize;
+    let mut x = radius as usize;
+    let mut y = 0 as usize;
+    let width = img_width as usize;
+
+    for m in maxima {
+        let (x0, y0) = *m;
+        let mut err = 0 as i32;
+
+        // if let DynamicImage::ImageRgb8(rgb_img) = in_img {
+        //     let mut rgb_buffer = rgb_img.into_raw();
+        while x >= y {
+            println!("width: {},height: {}\n", width, height);
+            println!("x: {},y: {},err: {}\n", x, y, err);
+            let i1 = x0 + y;
+            let i2 = y0 + x;
+            let i3 = x0 - y;
+            let i4 = x0 - x;
+            let i5 = y0 + y;
+            let i6 = y0 - x;
+            let i7 = y0 - y;
+            let i8 = x0 + x;
+
+            if i8 < width && i5 < height {
+                in_img[i8 + i5 * width] = 1.0;
+            }
+            if i1 < width && i2 < height {
+                in_img[i1 + i2 * width] = 1.0;
+            }
+            if i3 > 0 && i2 < height {
+                in_img[i3 + i2 * width] = 1.0;
+            }
+
+            if i4 > 0 && i7 > 0 {
+                in_img[i4 + i7 * width] = 1.0;
+            }
+            if i3 > 0 && i6 > 0 {
+                in_img[i3 + i6 * width] = 1.0;
+            }
+
+            if i4 > 0 && i5 < height {
+                in_img[i4 + i5 * width] = 1.0;
+            }
+            if i1 < width && i6 > 0 {
+                in_img[i1 + i6 * width] = 1.0;
+            }
+            if i8 < width && i7 > 0 {
+                in_img[i8 + i7 * width] = 1.0;
+            }
+            //rgb_buffer[x as usize] = 0;
+
+            if err <= 0 {
+                y += 1;
+                err += (2 * y + 1) as i32;
+            } else {
+                x -= 1;
+                err -= (2 * x + 1) as i32;
+            }
+        }
+    }
 }
 
 fn main() {
@@ -216,9 +338,16 @@ fn main() {
     let mut grey_buffer = Vec::<f32>::with_capacity((width * height) as usize);
     skin_threshold(input_img, &mut grey_buffer);
 
+    let sigma = 30.0;
+
     //let mut smooth_buffer_intermediate = Vec::<f32>::with_capacity((width * height) as usize);
     let mut smooth_buffer = Vec::<f32>::with_capacity((width * height) as usize);
-    gaussian_box_blur(30.0, &mut grey_buffer, width, &mut smooth_buffer);
+    gaussian_box_blur(sigma, &mut grey_buffer, width, &mut smooth_buffer);
+
+    // Find and label the maxima in the smoothed image
+    let maxima = find_local_maxima(&mut smooth_buffer, width);
+    let feature_radius = (1.414 * sigma) as u32;
+    draw_circles(&maxima[..], feature_radius, &mut smooth_buffer, width);
 
     let total_seconds = time::precise_time_s() - start;
 
