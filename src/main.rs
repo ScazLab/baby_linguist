@@ -59,6 +59,7 @@ fn diff_of_gaussians(sigma: f32, k: f32,  input_img: &mut Vec<f32>, width: u32, 
 
     for i in 0..output_img.len(){
         output_img[i]= (output_img[i] - smooth_buffer_2[i]).abs();
+        //output_img[i]-= smooth_buffer_2[i];
     }
 }
 
