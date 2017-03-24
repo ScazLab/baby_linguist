@@ -369,7 +369,7 @@ fn draw_circles(maxima: &[(usize, usize, f32)],
 // Takes a vector  corresponding to the (x,y) coords
 // of the the centroid of a hand in some number of frames
 // and does a fourier analysis.
-fn freqAnalyize(window: Vec<(u32,u32)> ){
+fn freq_analyize(window: Vec<(u32,u32)> ){
 
     let fft_len = window.len()-1;
     let mut fft = rustfft::FFT::new(fft_len, false);
@@ -432,8 +432,14 @@ fn process_directory(path: &str, baby_gui: &mut gui::BabyGui) {
 }
 
 fn main() {
+    let args: Vec<_> = std::env::args().collect();
+    if args.len() != 2 {
+        println!("Usage: {} [image directory]", &args[0]);
+        return;
+    }
+
     let mut baby_gui = gui::BabyGui::new();
-    process_directory("test_babies", &mut baby_gui);
+    process_directory(&args[1], &mut baby_gui);
     while baby_gui.handle_events() {
     }
 }
