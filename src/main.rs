@@ -1,5 +1,7 @@
 extern crate image;
 extern crate time;
+extern crate rustfft;
+extern crate num;
 extern crate glob;
 #[macro_use] extern crate conrod;
 
@@ -13,6 +15,7 @@ use glob::glob;
 
 use image::GenericImage;
 use image::DynamicImage;
+
 
 fn rgb_to_yuv(r: u8, g: u8, b: u8) -> (u8, u8, u8) {
     let (rf, gf, bf) = (r as f32, g as f32, b as f32);
@@ -361,6 +364,32 @@ fn draw_circles(maxima: &[(usize, usize, f32)],
             }
         }
     }
+}
+
+// Takes a vector  corresponding to the (x,y) coords
+// of the the centroid of a hand in some number of frames
+// and does a fourier analysis.
+fn freqAnalyize(window: Vec<(u32,u32)> ){
+
+    let fft_len = window.len()-1;
+    let mut fft = rustfft::FFT::new(fft_len, false);
+    let mut signal = vec![num::Complex{re: 0.0, im: 0.0}; fft_len];
+
+    for i in 0..fft_len{
+        let (x_1,y_1) = window[i];
+        let (x_2, y_2) = window[i+1];
+
+        let dx = x_2 as i32 - x_1 as i32;
+        let dy = y_2 as i32 - y_1 as i32;
+
+        signal[i].re = (dx*dx + dy*dy) as f32;
+
+
+    }
+    let mut spectrum = signal.clone();
+    fft.process(&signal, &mut spectrum);
+
+    println!("Freq spectrum: {:?}\n",spectrum);
 }
 
 fn process_directory(path: &str, baby_gui: &mut gui::BabyGui) {
