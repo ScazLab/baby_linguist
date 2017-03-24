@@ -1,8 +1,15 @@
 extern crate image;
 extern crate time;
+extern crate glob;
+#[macro_use] extern crate conrod;
+
+mod support;
+mod gui;
 
 use std::path::Path;
+use std::cmp;
 use std::f32;
+use glob::glob;
 
 use image::GenericImage;
 use image::DynamicImage;
@@ -193,7 +200,8 @@ fn box_blur_sizes(sigma: f32) -> [usize; 3] {
     return sizes;
 }
 
-/*fn benchmark<F: FnMut()>(name: &str, mut f: F) -> f64 {
+#[allow(dead_code)]
+fn benchmark<F: FnMut()>(name: &str, mut f: F) -> f64 {
     let start = time::precise_time_s();
     let mut repeat_number = 1;
     let mut total_runs = 0;
@@ -208,7 +216,7 @@ fn box_blur_sizes(sigma: f32) -> [usize; 3] {
     let time_each = total_time / total_runs as f64;
     println!("{} took: {:.4} seconds per call", name, time_each);
     return time_each;
-}*/
+}
 
 fn find_local_maxima(in_img: &[f32], img_width: u32) -> Vec<(usize, usize, f32)> {
     let img_height = in_img.len() / img_width as usize;
@@ -263,6 +271,7 @@ fn skin_threshold(input_img: DynamicImage, grey_buffer: &mut Vec<f32>) {
     }
 }
 
+#[allow(dead_code)]
 fn write_grey_image(filename: &str, grey_img: &[f32], img_width: u32) {
     let len = grey_img.len();
     let img_height = len as u32 / img_width;
@@ -354,35 +363,48 @@ fn draw_circles(maxima: &[(usize, usize, f32)],
     }
 }
 
-fn main() {
-    let input_img = image::open(&Path::new("D:/baby-face-stills/240_0_231.jpg")).unwrap();
-    let (width, height) = input_img.dimensions();
-
-    let start = time::precise_time_s();
-
-    let mut grey_buffer = Vec::<f32>::with_capacity((width * height) as usize);
-    skin_threshold(input_img, &mut grey_buffer);
-    write_grey_image("greyskin.png", &grey_buffer[..], width);
-
+fn process_directory(path: &str, baby_gui: &mut gui::BabyGui) {
+    // Parameters
     let sigma = 4.0;
 
-    //let mut smooth_buffer_intermediate = Vec::<f32>::with_capacity((width * height) as usize);
-    let mut smooth_buffer = Vec::<f32>::with_capacity((width * height) as usize);
-    //gaussian_box_blur(sigma, &mut grey_buffer, width, &mut smooth_buffer);
-    diff_of_gaussians(sigma, 1.6, &mut grey_buffer, width, &mut smooth_buffer);
+    let mut total_process_time = 0.0;
 
-    write_grey_image("G.png", &grey_buffer[..], width);
+    // These vectors will be continually resused
+    let mut grey_buffer = Vec::<f32>::new();
+    let mut smooth_buffer = Vec::<f32>::new();
 
-    // Find and label the maxima in the smoothed image
-    let mut maxima = find_local_maxima(&mut smooth_buffer, width);
-    maxima.sort_by(|&(_, _, a), &(_, _, b)| a.partial_cmp(&b).unwrap() );
-    //println!("num of local maxima: {}\n",maxima.len());
-    let feature_radius = (1.414 * sigma) as u32;
-    draw_circles(&maxima[0..4], feature_radius, &mut smooth_buffer, width);
+    let mut i: u32 = 0;
+    for img_path in glob(&format!("{}/*.jpg", path)).expect("Failed to read glob pattern") {
+        let input_img = image::open(&img_path.unwrap()).unwrap();
+        let (width, _) = input_img.dimensions();
 
-    let total_seconds = time::precise_time_s() - start;
+        let start = time::precise_time_s();
 
-    write_grey_image("DoG.png", &smooth_buffer[..], width);
+        skin_threshold(input_img, &mut grey_buffer);
+        diff_of_gaussians(sigma, 1.6, &mut grey_buffer, width, &mut smooth_buffer);
 
-    println!("Done! Processing time took: {:.4} seconds", total_seconds);
+        // Find and label the top maxima in the diff o' g. image
+        let mut maxima = find_local_maxima(&mut smooth_buffer, width);
+        maxima.sort_by(|&(_, _, a), &(_, _, b)| a.partial_cmp(&b).unwrap() );
+
+        total_process_time += time::precise_time_s() - start;
+
+        let feature_radius = (1.414 * sigma) as u32;
+        draw_circles(&maxima[0..cmp::min(4, maxima.len())], feature_radius, &mut smooth_buffer, width);
+
+        baby_gui.set_image(&smooth_buffer, width);
+        baby_gui.handle_events();
+        //write_grey_image(&format!("DoG{}.png", i), &smooth_buffer[..], width);
+
+        i += 1;
+    }
+
+    println!("Done! Processing {} frames took: {:.4} seconds per frame ({:.2} FPS)", i, total_process_time / i as f64, i as f64 / total_process_time);
+}
+
+fn main() {
+    let mut baby_gui = gui::BabyGui::new();
+    process_directory("test_babies", &mut baby_gui);
+    while baby_gui.handle_events() {
+    }
 }
