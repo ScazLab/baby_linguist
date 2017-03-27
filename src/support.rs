@@ -38,9 +38,9 @@ impl EventLoop {
         events.extend(display.poll_events());
 
         // If there are no events and the `Ui` does not need updating, wait for the next event.
-        if events.is_empty() && !self.ui_needs_update {
-            events.extend(display.wait_events().next());
-        }
+        //if events.is_empty() && !self.ui_needs_update {
+        //    events.extend(display.wait_events().next());
+        //}
 
         self.ui_needs_update = false;
         self.last_update = std::time::Instant::now();

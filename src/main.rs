@@ -68,13 +68,15 @@ fn diff_of_gaussians(sigma: f32,
                      input_img: &mut Vec<f32>,
                      width: u32,
                      output_img: &mut Vec<f32>) {
-    let mut smooth_buffer_2 = Vec::<f32>::with_capacity(output_img.len());
+    let len = input_img.len();
+    let mut input_buffer = input_img.clone();
+    let mut smooth_buffer_2 = Vec::<f32>::with_capacity(len);
     unsafe {
-        smooth_buffer_2.set_len(output_img.len());
+        smooth_buffer_2.set_len(len);
     }
 
-    gaussian_box_blur(sigma, input_img, width, &mut smooth_buffer_2);
-    gaussian_box_blur(sigma * k, input_img, width, output_img);
+    gaussian_box_blur(sigma, &mut input_buffer, width, &mut smooth_buffer_2);
+    gaussian_box_blur(sigma * k, &mut input_buffer, width, output_img);
 
     for i in 0..output_img.len() {
         output_img[i] = (smooth_buffer_2[i] - output_img[i]).max(0.);
@@ -389,10 +391,10 @@ fn freq_analyize(window: Vec<(u32,u32)> ){
     let mut spectrum = signal.clone();
     fft.process(&signal, &mut spectrum);
 
-    println!("Freq spectrum: {:?}\n",spectrum);
+    println!("Freq spectrum: {:?}\n", spectrum);
 }
 
-fn process_directory(path: &str, baby_gui: &mut gui::BabyGui) {
+fn process_directory(path: &str, baby_gui_skin: &mut gui::BabyGui, baby_gui_hands: &mut gui::BabyGui) {
     // Parameters
     let sigma = 4.0;
 
@@ -421,8 +423,11 @@ fn process_directory(path: &str, baby_gui: &mut gui::BabyGui) {
         let feature_radius = (1.414 * sigma) as u32;
         draw_circles(&maxima[0..cmp::min(4, maxima.len())], feature_radius, &mut smooth_buffer, width);
 
-        baby_gui.set_image(&smooth_buffer, width);
-        baby_gui.handle_events();
+        baby_gui_skin.set_image(&grey_buffer, width);
+        baby_gui_skin.handle_events();
+
+        baby_gui_hands.set_image(&smooth_buffer, width);
+        baby_gui_hands.handle_events();
         //write_grey_image(&format!("DoG{}.png", i), &smooth_buffer[..], width);
 
         i += 1;
@@ -438,8 +443,9 @@ fn main() {
         return;
     }
 
-    let mut baby_gui = gui::BabyGui::new();
-    process_directory(&args[1], &mut baby_gui);
-    while baby_gui.handle_events() {
+    let mut baby_gui_skin = gui::BabyGui::new();
+    let mut baby_gui_hands = gui::BabyGui::new();
+    process_directory(&args[1], &mut baby_gui_skin, &mut baby_gui_hands);
+    while baby_gui_skin.handle_events() && baby_gui_hands.handle_events() {
     }
 }

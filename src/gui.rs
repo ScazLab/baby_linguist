@@ -1,8 +1,9 @@
 use support;
+use std;
 
 use conrod::{self, widget, Sizeable, Positionable, Widget};
 use conrod::backend::glium::glium;
-use conrod::backend::glium::glium::{DisplayBuild};
+use conrod::backend::glium::glium::{DisplayBuild, Surface};
 
 const WIDTH: u32 = 650;
 const HEIGHT: u32 = 490;
@@ -59,7 +60,7 @@ impl BabyGui {
         }
 
         let mut out_i = 0;
-        for i in 0..(width * height) as usize {
+        for i in (0..(width * height) as usize).rev() {
             let val = (grey_img[i] * 255.0) as u8;
             img_buffer[out_i] = val;
             img_buffer[out_i + 1] = val;
@@ -76,6 +77,8 @@ impl BabyGui {
         } else {
             self.display_id = Some(self.image_map.insert(texture));
         }
+        self.event_loop.needs_update();
+        self.ui.needs_redraw();
 
         self.width = width as f64;
         self.height = height as f64;
@@ -84,8 +87,8 @@ impl BabyGui {
     // Returns true as long as the program should not quit
     pub fn handle_events(&mut self) -> bool {
         for event in self.event_loop.next(&self.display) {
-            // Use the `winit` backend feature to convert the winit event to a conrod one.
-            // And then handle resizing and redrawing events
+            // Use the `winit` backend feature to convert the winit event to a conrod one,
+            // to handle resizing and redrawing events
             if let Some(event) = conrod::backend::winit::convert(event.clone(), &self.display) {
                 self.ui.handle_event(event);
             }
@@ -94,7 +97,7 @@ impl BabyGui {
                 // Break from the loop upon `Escape`.
                 glium::glutin::Event::KeyboardInput(_, _, Some(glium::glutin::VirtualKeyCode::Escape)) |
                 glium::glutin::Event::Closed =>
-                    return false,
+                    std::process::exit(0),
                 _ => {},
             }
         }
@@ -112,7 +115,7 @@ impl BabyGui {
         if let Some(primitives) = self.ui.draw_if_changed() {
             self.renderer.fill(&self.display, primitives, &self.image_map);
             let mut target = self.display.draw();
-            //target.clear_color(0.0, 0.0, 0.0, 1.0);
+            target.clear_color(0.0, 0.0, 0.0, 1.0);
             self.renderer.draw(&self.display, &mut target, &self.image_map).unwrap();
             target.finish().unwrap();
         }
