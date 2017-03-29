@@ -6,10 +6,10 @@ extern crate glob;
 #[macro_use] extern crate conrod;
 
 mod support;
+mod tracking;
 mod gui;
 
 use std::path::Path;
-use std::cmp;
 use std::f32;
 use glob::glob;
 
@@ -223,14 +223,14 @@ fn benchmark<F: FnMut()>(name: &str, mut f: F) -> f64 {
     return time_each;
 }
 
-fn find_local_maxima(in_img: &[f32], img_width: u32) -> Vec<(usize, usize, f32)> {
-    let img_height = in_img.len() / img_width as usize;
-    let mut local_maxima = Vec::<(usize, usize, f32)>::new();
+fn find_local_maxima(in_img: &[f32], img_width: u32) -> Vec<(u32, u32, f32)> {
+    let img_height = in_img.len() as u32 / img_width;
+    let mut local_maxima = Vec::<(u32, u32, f32)>::new();
 
     for y in 1..img_height - 1 {
-        'inner: for x in 1..(img_width - 1) as usize {
-            let curr_index = x + y * img_width as usize;
-            let curr_pixel = in_img[curr_index];
+        'inner: for x in 1..(img_width - 1) {
+            let curr_index = x + y * img_width;
+            let curr_pixel = in_img[curr_index as usize];
             // Heres a heuristic im pulling out of my a**.
             // we dont want to check that every pixel is a
             // local max
@@ -300,7 +300,7 @@ fn write_grey_image(filename: &str, grey_img: &[f32], img_width: u32) {
 // This is the midpoint circle alg:
 // https://en.wikipedia.org/wiki/Midpoint_circle_algorithm
 
-fn draw_circles(maxima: &[(usize, usize, f32)],
+fn draw_circles(maxima: &[(u32, u32)],
                 radius: u32,
                 in_img: &mut Vec<f32>,
                 img_width: u32) {
@@ -312,7 +312,8 @@ fn draw_circles(maxima: &[(usize, usize, f32)],
         let mut x = radius as usize;
         let mut y = 0 as usize;
 
-        let (x0, y0, _) = *m;
+        let x0 = m.0 as usize;
+        let y0 = m.1 as usize;
         let mut err = 0 as i32;
 
         // if let DynamicImage::ImageRgb8(rgb_img) = in_img {
@@ -398,6 +399,8 @@ fn process_directory(path: &str, baby_gui_skin: &mut gui::BabyGui, baby_gui_hand
     // Parameters
     let sigma = 4.0;
 
+    let mut track_hands = tracking::HandTracking::new();
+
     let mut total_process_time = 0.0;
 
     // These vectors will be continually resused
@@ -407,7 +410,7 @@ fn process_directory(path: &str, baby_gui_skin: &mut gui::BabyGui, baby_gui_hand
     let mut i: u32 = 0;
     for img_path in glob(&format!("{}/*.jpg", path)).expect("Failed to read glob pattern") {
         let input_img = image::open(&img_path.unwrap()).unwrap();
-        let (width, _) = input_img.dimensions();
+        let (width, height) = input_img.dimensions();
 
         let start = time::precise_time_s();
 
@@ -415,13 +418,19 @@ fn process_directory(path: &str, baby_gui_skin: &mut gui::BabyGui, baby_gui_hand
         diff_of_gaussians(sigma, 1.6, &mut grey_buffer, width, &mut smooth_buffer);
 
         // Find and label the top maxima in the diff o' g. image
-        let mut maxima = find_local_maxima(&mut smooth_buffer, width);
-        maxima.sort_by(|&(_, _, a), &(_, _, b)| a.partial_cmp(&b).unwrap() );
+        let maxima = find_local_maxima(&mut smooth_buffer, width);
+        track_hands.add_maxima(width, height, &maxima);
 
         total_process_time += time::precise_time_s() - start;
 
         let feature_radius = (1.414 * sigma) as u32;
-        draw_circles(&maxima[0..cmp::min(4, maxima.len())], feature_radius, &mut smooth_buffer, width);
+        if track_hands.left_hand_coords.len() > 0 {
+            let hand_points = vec![track_hands.left_hand_coords.last().unwrap().clone(),
+                                   track_hands.right_hand_coords.last().unwrap().clone()];
+            draw_circles(&hand_points, feature_radius, &mut smooth_buffer, width);
+        }
+
+        //draw_circles(&maxima[0..cmp::min(4, maxima.len())], feature_radius, &mut smooth_buffer, width);
 
         baby_gui_skin.set_image(&grey_buffer, width);
         baby_gui_skin.handle_events();
