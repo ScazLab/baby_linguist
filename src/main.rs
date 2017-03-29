@@ -395,7 +395,7 @@ fn freq_analyize(window: Vec<(u32,u32)> ){
     println!("Freq spectrum: {:?}\n", spectrum);
 }
 
-fn process_directory(path: &str, baby_gui_skin: &mut gui::BabyGui, baby_gui_hands: &mut gui::BabyGui) {
+fn process_directory(path: &str, baby_gui_skin: &mut Option<gui::BabyGui>, baby_gui_hands: &mut Option<gui::BabyGui>) {
     // Parameters
     let sigma = 4.0;
 
@@ -432,11 +432,15 @@ fn process_directory(path: &str, baby_gui_skin: &mut gui::BabyGui, baby_gui_hand
 
         //draw_circles(&maxima[0..cmp::min(4, maxima.len())], feature_radius, &mut smooth_buffer, width);
 
-        baby_gui_skin.set_image(&grey_buffer, width);
-        baby_gui_skin.handle_events();
+        if let &mut Some(ref mut gui_skin) = baby_gui_skin {
+            gui_skin.set_image(&grey_buffer, width);
+            gui_skin.handle_events();
+        }
 
-        baby_gui_hands.set_image(&smooth_buffer, width);
-        baby_gui_hands.handle_events();
+        if let &mut Some(ref mut gui_hands) = baby_gui_hands {
+            gui_hands.set_image(&smooth_buffer, width);
+            gui_hands.handle_events();
+        }
         //write_grey_image(&format!("DoG{}.png", i), &smooth_buffer[..], width);
 
         i += 1;
@@ -455,6 +459,9 @@ fn main() {
     let mut baby_gui_skin = gui::BabyGui::new();
     let mut baby_gui_hands = gui::BabyGui::new();
     process_directory(&args[1], &mut baby_gui_skin, &mut baby_gui_hands);
-    while baby_gui_skin.handle_events() && baby_gui_hands.handle_events() {
+
+    if let (Some(mut gui_skin), Some(mut gui_hands)) = (baby_gui_skin, baby_gui_hands) {
+        while gui_skin.handle_events() && gui_hands.handle_events() {
+        }
     }
 }

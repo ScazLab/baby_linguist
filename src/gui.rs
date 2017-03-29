@@ -25,28 +25,34 @@ pub struct BabyGui {
 }
 
 impl BabyGui {
-    pub fn new() -> Self {
+    pub fn new() -> Option<Self> {
         let display = glium::glutin::WindowBuilder::new()
             .with_vsync()
             .with_dimensions(WIDTH, HEIGHT)
             .with_title("Baby Linguist")
-            .build_glium()
-            .unwrap();
+            .build_glium();
 
-        let mut ui = conrod::UiBuilder::new([WIDTH as f64, HEIGHT as f64]).build();
-        let renderer = conrod::backend::glium::Renderer::new(&display).unwrap();
-        let ids = Ids::new(ui.widget_id_generator());
+        match display {
+            Ok(display) => {
+                let mut ui = conrod::UiBuilder::new([WIDTH as f64, HEIGHT as f64]).build();
+                let renderer = conrod::backend::glium::Renderer::new(&display).unwrap();
+                let ids = Ids::new(ui.widget_id_generator());
 
-        BabyGui {
-            display: display,
-            ui: ui,
-            renderer: renderer,
-            ids: ids,
-            event_loop: support::EventLoop::new(),
-            image_map: conrod::image::Map::new(),
-            display_id: None,
-            width: 0.,
-            height: 0.,
+                Some(BabyGui {
+                    display: display,
+                    ui: ui,
+                    renderer: renderer,
+                    ids: ids,
+                    event_loop: support::EventLoop::new(),
+                    image_map: conrod::image::Map::new(),
+                    display_id: None,
+                    width: 0.,
+                    height: 0.,
+                })},
+            Err(e) => {
+                println!("Unable to make window: {:?}", e);
+                None
+            }
         }
     }
 
