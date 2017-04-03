@@ -102,6 +102,7 @@ impl BabyGui {
             match event {
                 // Break from the loop upon `Escape`.
                 glium::glutin::Event::KeyboardInput(_, _, Some(glium::glutin::VirtualKeyCode::Escape)) |
+                glium::glutin::Event::KeyboardInput(_, _, Some(glium::glutin::VirtualKeyCode::Q)) |
                 glium::glutin::Event::Closed =>
                     std::process::exit(0),
                 _ => {},
