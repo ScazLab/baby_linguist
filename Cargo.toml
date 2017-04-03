@@ -9,4 +9,9 @@ image = "*"
 time = "*"
 rustfft = "*"
 num = "*"
+<<<<<<< HEAD
+=======
+glob = "*"
+conrod = { version = "*", features = ["glium", "winit"] }
+>>>>>>> 5028f8c856b1d234d76bb3f37cf86bc641aee624
 
