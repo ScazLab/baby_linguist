@@ -5,6 +5,7 @@ extern crate num;
 
 use std::path::Path;
 use std::f32;
+use std::f64;
 
 use image::GenericImage;
 use image::DynamicImage;
@@ -360,7 +361,7 @@ fn draw_circles(maxima: &[(usize, usize, f32)],
 // Takes a vector  corresponding to the (x,y) coords
 // of the the centroid of a hand in some number of frames
 // and does a fourier analysis.
-fn freqAnalyize(window: Vec<(u32,u32)> ){
+fn freqAnalyze(window: Vec<(u32,u32)> )-> u32 {
 
     let fft_len = window.len()-1;
     let mut fft = rustfft::FFT::new(fft_len, false);
@@ -379,41 +380,77 @@ fn freqAnalyize(window: Vec<(u32,u32)> ){
     }
     let mut spectrum = signal.clone();
     fft.process(&signal, &mut spectrum);
-    
     println!("Freq spectrum: {:?}\n",spectrum);
-    
-    
+
+    let mut max_i = 0;
+    let mut max_mag = 0.0;
+
+    for i in 1..spectrum.len(){
+        let re = spectrum[i as usize].re;
+        let im = spectrum[i as usize].im;
+        let curr_mag = re*re + im*im ;
+
+        if curr_mag> max_mag{
+            max_mag = curr_mag;
+            max_i = i;
+        }
+    }
+    // Place holder value. We need to account for the fact
+    // that the baby may not be moving its hand
+    if max_mag < 1000.0{
+        max_i = 0
+    }
+    println!("Max frequency is {}!\n",max_i);
+    return max_i as u32;
+}
+
+fn compareHandFreqs(left_hand_window: Vec<(u32,u32)>, right_hand_window: Vec<(u32,u32)> ){
+    let left_hand_freq = freqAnalyze(left_hand_window);
+    let right_hand_freq = freqAnalyze(right_hand_window);
+
+    if left_hand_freq == right_hand_freq{
+        println!("Both hands have the same Freq!")
+    }
 }
 
 fn main() {
-    let input_img = image::open(&Path::new("D:/baby-face-stills/240_0_231.jpg")).unwrap();
-    let (width, height) = input_img.dimensions();
+    // let input_img = image::open(&Path::new("D:/baby-face-stills/240_0_231.jpg")).unwrap();
+    // let (width, height) = input_img.dimensions();
 
-    let start = time::precise_time_s();
+    // let start = time::precise_time_s();
 
-    let mut grey_buffer = Vec::<f32>::with_capacity((width * height) as usize);
-    skin_threshold(input_img, &mut grey_buffer);
-    write_grey_image("greyskin.png", &grey_buffer[..], width);
+    // let mut grey_buffer = Vec::<f32>::with_capacity((width * height) as usize);
+    // skin_threshold(input_img, &mut grey_buffer);
+    // write_grey_image("greyskin.png", &grey_buffer[..], width);
 
-    let sigma = 4.0;
+    // let sigma = 4.0;
 
-    //let mut smooth_buffer_intermediate = Vec::<f32>::with_capacity((width * height) as usize);
-    let mut smooth_buffer = Vec::<f32>::with_capacity((width * height) as usize);
-    //gaussian_box_blur(sigma, &mut grey_buffer, width, &mut smooth_buffer);
-    diff_of_gaussians(sigma, 1.6, &mut grey_buffer, width, &mut smooth_buffer);
+    // //let mut smooth_buffer_intermediate = Vec::<f32>::with_capacity((width * height) as usize);
+    // let mut smooth_buffer = Vec::<f32>::with_capacity((width * height) as usize);
+    // //gaussian_box_blur(sigma, &mut grey_buffer, width, &mut smooth_buffer);
+    // diff_of_gaussians(sigma, 1.6, &mut grey_buffer, width, &mut smooth_buffer);
 
-    write_grey_image("G.png", &grey_buffer[..], width);
+    // write_grey_image("G.png", &grey_buffer[..], width);
 
-    // Find and label the maxima in the smoothed image
-    let mut maxima = find_local_maxima(&mut smooth_buffer, width);
-    maxima.sort_by(|&(_, _, a), &(_, _, b)| a.partial_cmp(&b).unwrap() );
-    //println!("num of local maxima: {}\n",maxima.len());
-    let feature_radius = (1.414 * sigma) as u32;
-    draw_circles(&maxima[0..4], feature_radius, &mut smooth_buffer, width);
+    // // Find and label the maxima in the smoothed image
+    // let mut maxima = find_local_maxima(&mut smooth_buffer, width);
+    // maxima.sort_by(|&(_, _, a), &(_, _, b)| a.partial_cmp(&b).unwrap() );
+    // //println!("num of local maxima: {}\n",maxima.len());
+    // let feature_radius = (1.414 * sigma) as u32;
+    // draw_circles(&maxima[0..4], feature_radius, &mut smooth_buffer, width);
 
-    let total_seconds = time::precise_time_s() - start;
+    // let total_seconds = time::precise_time_s() - start;
 
-    write_grey_image("DoG.png", &smooth_buffer[..], width);
+    // write_grey_image("DoG.png", &smooth_buffer[..], width);
 
-    println!("Done! Processing time took: {:.4} seconds", total_seconds);
+    // println!("Done! Processing time took: {:.4} seconds", total_seconds);
+    let mut test = Vec::<(u32,u32)>::new();
+    for i in 0..20{
+        let x = i as f32;
+        let p = f32::consts::PI;
+        let y = (p/(19.0)*x*6.0).sin()*10.0 + 30.0;
+        test.push((x as u32,y as u32));
+    }
+    println!("{:?}", test);
+    freqAnalyze(test);
 }
