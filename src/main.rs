@@ -234,7 +234,7 @@ fn find_local_maxima(in_img: &[f32], img_width: u32) -> Vec<(u32, u32, f32)> {
             // Heres a heuristic im pulling out of my a**.
             // we dont want to check that every pixel is a
             // local max
-            if curr_pixel > 0.25 {
+            if curr_pixel > 0.225 {
                 for adj_y in -1..2 as i32 {
                     for adj_x in -1..2 as i32 {
                         let adj_pixel = in_img[((x as i32 + adj_x) + (y as i32 + adj_y) * img_width as i32) as
@@ -303,7 +303,8 @@ fn write_grey_image(filename: &str, grey_img: &[f32], img_width: u32) {
 fn draw_circles(maxima: &[(u32, u32)],
                 radius: u32,
                 in_img: &mut Vec<f32>,
-                img_width: u32) {
+                img_width: u32,
+                grey_shade: f32) {
     let height = in_img.len() / img_width as usize;
     let width = img_width as usize;
 
@@ -331,30 +332,30 @@ fn draw_circles(maxima: &[(u32, u32)],
             let i8 = x0 + x;
 
             if i8 < width && i5 < height {
-                in_img[i8 + i5 * width] = 1.0;
+                in_img[i8 + i5 * width] = grey_shade;
             }
             if i1 < width && i2 < height {
-                in_img[i1 + i2 * width] = 1.0;
+                in_img[i1 + i2 * width] = grey_shade;
             }
             if i3 > 0 && i2 < height {
-                in_img[i3 + i2 * width] = 1.0;
+                in_img[i3 + i2 * width] = grey_shade;
             }
 
             if i4 > 0 && i7 > 0 {
-                in_img[i4 + i7 * width] = 1.0;
+                in_img[i4 + i7 * width] = grey_shade;
             }
             if i3 > 0 && i6 > 0 {
-                in_img[i3 + i6 * width] = 1.0;
+                in_img[i3 + i6 * width] = grey_shade;
             }
 
             if i4 > 0 && i5 < height {
-                in_img[i4 + i5 * width] = 1.0;
+                in_img[i4 + i5 * width] = grey_shade;
             }
             if i1 < width && i6 > 0 {
-                in_img[i1 + i6 * width] = 1.0;
+                in_img[i1 + i6 * width] = grey_shade;
             }
             if i8 < width && i7 > 0 {
-                in_img[i8 + i7 * width] = 1.0;
+                in_img[i8 + i7 * width] = grey_shade;
             }
             //rgb_buffer[x as usize] = 0;
 
@@ -442,7 +443,9 @@ fn process_directory(path: &str, baby_gui_skin: &mut Option<gui::BabyGui>, baby_
 
     let mut i: u32 = 0;
     for img_path in glob(&format!("{}/*.jpg", path)).expect("Failed to read glob pattern") {
-        let input_img = image::open(&img_path.unwrap()).unwrap();
+        let img_path = img_path.unwrap();
+        println!("Processing image: {:?}", &img_path);
+        let input_img = image::open(&img_path).unwrap();
         let (width, height) = input_img.dimensions();
 
         let start = time::precise_time_s();
@@ -456,11 +459,15 @@ fn process_directory(path: &str, baby_gui_skin: &mut Option<gui::BabyGui>, baby_
 
         total_process_time += time::precise_time_s() - start;
 
+        // Draw all found points
         let feature_radius = (1.414 * sigma) as u32;
+        let all_hand_points: Vec<(u32, u32)> = maxima.into_iter().map(|(x, y, _)| (x, y)).collect();
+        draw_circles(&all_hand_points, feature_radius, &mut smooth_buffer, width, 0.4);
+
         if track_hands.left_hand_coords.len() > 0 {
             let hand_points = vec![track_hands.left_hand_coords.last().unwrap().clone(),
                                    track_hands.right_hand_coords.last().unwrap().clone()];
-            draw_circles(&hand_points, feature_radius, &mut smooth_buffer, width);
+            draw_circles(&hand_points, feature_radius, &mut smooth_buffer, width, 1.0);
         }
 
         //draw_circles(&maxima[0..cmp::min(4, maxima.len())], feature_radius, &mut smooth_buffer, width);
@@ -474,7 +481,7 @@ fn process_directory(path: &str, baby_gui_skin: &mut Option<gui::BabyGui>, baby_
             gui_hands.set_image(&smooth_buffer, width);
             gui_hands.handle_events();
         }
-        //write_grey_image(&format!("DoG{}.png", i), &smooth_buffer[..], width);
+        write_grey_image(&format!("./video/DoG{}.png", i), &smooth_buffer[..], width);
 
         i += 1;
     }
