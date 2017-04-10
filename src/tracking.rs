@@ -198,7 +198,7 @@ fn gradient_optimize(func: F, init_coeffs: &[f64])-> Vec<f64>
 
             for i in 0..coeff_len{
                 x_new[i] += t*grad[i];
-                f_plus_grad += alpha*t*grad[i]*grad[i];
+                f_plus_grad += alpha*t*(-grad[i])*grad[i];
             }
 
             let f_next  = func(&x_new[..]);
