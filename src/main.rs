@@ -481,7 +481,7 @@ fn process_directory(path: &str, baby_gui_skin: &mut Option<gui::BabyGui>, baby_
             gui_hands.set_image(&smooth_buffer, width);
             gui_hands.handle_events();
         }
-        write_grey_image(&format!("./video/DoG{}.png", i), &smooth_buffer[..], width);
+        //write_grey_image(&format!("./video/DoG{}.png", i), &smooth_buffer[..], width);
 
         i += 1;
     }
