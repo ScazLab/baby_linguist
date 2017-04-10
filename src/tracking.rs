@@ -98,10 +98,10 @@ impl HandTracking {
                     //let pred_left_y = self.left_hand_coords[n - 1].1 as f32 * 2.0 - self.left_hand_coords[n - 2].1 as f32;
                     //let pred_right_x = self.right_hand_coords[n - 1].0 as f32 * 2.0 - self.right_hand_coords[n - 2].0 as f32;
                     //let pred_right_y = self.right_hand_coords[n - 1].1 as f32 * 2.0 - self.right_hand_coords[n - 2].1 as f32;
-                    let err_left_x = 0.01 * (pred_left_x - l_x as f32).powi(2);
-                    let err_left_y = 0.01 * (pred_left_y - l_y as f32).powi(2);
-                    let err_right_x = 0.01 * (pred_right_x - r_x as f32).powi(2);
-                    let err_right_y = 0.01 * (pred_right_y - r_y as f32).powi(2);
+                    let err_left_x = 0.02 * (pred_left_x - l_x as f32).powi(2);
+                    let err_left_y = 0.02 * (pred_left_y - l_y as f32).powi(2);
+                    let err_right_x = 0.02 * (pred_right_x - r_x as f32).powi(2);
+                    let err_right_y = 0.02 * (pred_right_y - r_y as f32).powi(2);
                     tracking_score = err_left_x + err_left_y + err_right_x + err_right_y;
 
                     // only print out competitive-ish scores, to make debugging easier

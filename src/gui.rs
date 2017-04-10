@@ -66,7 +66,7 @@ impl BabyGui {
         }
 
         let mut out_i = 0;
-        for i in (0..(width * height) as usize).rev() {
+        for i in 0..(width * height) as usize {
             let val = (grey_img[i] * 255.0) as u8;
             img_buffer[out_i] = val;
             img_buffer[out_i + 1] = val;
@@ -75,7 +75,7 @@ impl BabyGui {
             out_i += 4;
         }
 
-        let raw_image = glium::texture::RawImage2d::from_raw_rgba(img_buffer, (width, height));
+        let raw_image = glium::texture::RawImage2d::from_raw_rgba_reversed(img_buffer, (width, height));
         let texture = glium::texture::Texture2d::new(&self.display, raw_image).unwrap();
 
         if let Some(display_id) = self.display_id {

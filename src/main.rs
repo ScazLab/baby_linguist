@@ -8,6 +8,7 @@ extern crate glob;
 mod support;
 mod tracking;
 mod gui;
+mod optimize;
 
 use std::path::Path;
 use std::f32;
@@ -396,6 +397,30 @@ fn freq_analyize(window: Vec<(u32,u32)> ){
     println!("Freq spectrum: {:?}\n", spectrum);
 }
 
+pub fn process_directory_for_maxima(path: &str, sigma: f32) -> Vec<Vec<f32>> {
+    let mut all_maxima = Vec::<Vec::<f32>>::new();
+
+    // These vectors will be continually resused
+    let mut grey_buffer = Vec::<f32>::new();
+    let mut smooth_buffer = Vec::<f32>::new();
+
+    for img_path in glob(&format!("{}/*.jpg", path)).expect("Failed to read glob pattern") {
+        let img_path = img_path.unwrap();
+        println!("Processing image: {:?}", &img_path);
+        let input_img = image::open(&img_path).unwrap();
+        let (width, height) = input_img.dimensions();
+
+        skin_threshold(input_img, &mut grey_buffer);
+        diff_of_gaussians(sigma, 1.6, &mut grey_buffer, width, &mut smooth_buffer);
+
+        // Find and label the top maxima in the diff o' g. image
+        let maxima = find_local_maxima(&mut smooth_buffer, width);
+        all_maxima.push(maxima);
+    }
+
+    return all_maxima;
+}
+
 fn process_directory(path: &str, baby_gui_skin: &mut Option<gui::BabyGui>, baby_gui_hands: &mut Option<gui::BabyGui>) {
     // Parameters
     let sigma = 4.0;
@@ -448,7 +473,7 @@ fn process_directory(path: &str, baby_gui_skin: &mut Option<gui::BabyGui>, baby_
             gui_hands.set_image(&smooth_buffer, width);
             gui_hands.handle_events();
         }
-        write_grey_image(&format!("./video/DoG{}.png", i), &smooth_buffer[..], width);
+        //write_grey_image(&format!("./video/DoG{}.png", i), &smooth_buffer[..], width);
 
         i += 1;
     }
