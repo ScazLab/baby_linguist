@@ -107,7 +107,8 @@ impl HandTracking {
 
                     // only print out competitive-ish scores, to make debugging easier
                     if total_frame_score < 150.0 {
-                        println!("\tTracking score is {} + {} + {} + {} = {}", err_left_x, err_left_y, err_right_x, err_right_y, tracking_score);
+                        println!("\tTracking score is {} + {} + {} + {} = {}",
+                                 err_left_x, err_left_y, err_right_x, err_right_y, tracking_score);
                     }
                 }
 
@@ -121,7 +122,8 @@ impl HandTracking {
             }
         }
 
-        println!("Choose hand pair at (({}, {}), ({}, {})) with score of {}", best_left.0, best_left.1, best_right.0, best_right.1, best_score);
+        println!("Choose hand pair at (({}, {}), ({}, {})) with score of {}",
+                 best_left.0, best_left.1, best_right.0, best_right.1, best_score);
 
         self.left_hand_coords.push(best_left);
         self.right_hand_coords.push(best_right);
@@ -132,7 +134,7 @@ fn evaluate_tracker(handtracker: Handtracking)->f64{
     let num_prev_coords = handtracker.left_hand_coords.len()-1;
     let mut sum_least_sqrs = 0;
 
-    for in 0..num_prev_coords{
+    for i in 0..num_prev_coords{
         let l_prev = handtracker.left_hand_coords[i];
         let r_prev = handtracker.right_hand_coords[i];
         let l_next = handtracker.left_hand_coords[i+1];
@@ -147,7 +149,6 @@ fn evaluate_tracker(handtracker: Handtracking)->f64{
     return sum_least_sqrs as f64;
 }
 
-//fn calc_gradient(handtracker: Handtracking, coeffs: &mut Vec<f32>, width: u32, height: u32, maxima: &Vec<(u32, u32, f32)>)->Vec<f64>{
 fn calc_gradient(func:F, coeffs: &[f64])->Vec<f64>
     where F: Fn(&[f64])-> f64{
     // First calculate numerical gradient
@@ -161,7 +162,7 @@ fn calc_gradient(func:F, coeffs: &[f64])->Vec<f64>
         let x_post = coeff.clone();
 
         x_prev[i] -= h;
-        x_post[i] += h
+        x_post[i] += h;
 
         let f_prev = func(&x_prev[..]);
         let f_post = func(&x_post[..]);
