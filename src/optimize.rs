@@ -26,7 +26,7 @@ fn sigma_evaluation(path: &str, params: &[f64]) -> f64 {
     return evaluate_tracker(track_hands);
 }
 
-fn optimize_sigma(path: &str)->f64 {
+fn optimize_sigma(path: &str) -> f64 {
     return gradient_optimize(|params| sigma_evaluation(path, params), &[BEST_SIGMA])[0];
 }
 

@@ -11,7 +11,7 @@ mod gui;
 mod optimize;
 
 use std::path::Path;
-use std::f32;
+use std::f64;
 use glob::glob;
 
 use image::GenericImage;
@@ -47,10 +47,10 @@ fn is_skin(r: u8, g: u8, b: u8) -> bool {
 // Because the coefficient is identical for each element, you can use an accumulator
 // and thus the overall time complexity is just O(n) in the number of pixels.
 // Please note that we do modify the input_img buffer!
-fn gaussian_box_blur(mut sigma: f32,
-                     input_img: &mut Vec<f32>,
+fn gaussian_box_blur(mut sigma: f64,
+                     input_img: &mut Vec<f64>,
                      width: u32,
-                     output_img: &mut Vec<f32>) {
+                     output_img: &mut Vec<f64>) {
     // prepare the output buffer
     let len = input_img.len();
     output_img.reserve(len);
@@ -67,14 +67,14 @@ fn gaussian_box_blur(mut sigma: f32,
     box_blur_pass(input_img, output_img, width as usize, height, sizes[2]);
 }
 
-fn diff_of_gaussians(sigma: f32,
-                     k: f32,
-                     input_img: &mut Vec<f32>,
+fn diff_of_gaussians(sigma: f64,
+                     k: f64,
+                     input_img: &mut Vec<f64>,
                      width: u32,
-                     output_img: &mut Vec<f32>) {
+                     output_img: &mut Vec<f64>) {
     let len = input_img.len();
     let mut input_buffer = input_img.clone();
-    let mut smooth_buffer_2 = Vec::<f32>::with_capacity(len);
+    let mut smooth_buffer_2 = Vec::<f64>::with_capacity(len);
     unsafe {
         smooth_buffer_2.set_len(len);
     }
@@ -87,8 +87,8 @@ fn diff_of_gaussians(sigma: f32,
     }
 }
 
-fn box_blur_pass(v_in: &mut Vec<f32>,
-                 v_out: &mut Vec<f32>,
+fn box_blur_pass(v_in: &mut Vec<f64>,
+                 v_out: &mut Vec<f64>,
                  width: usize,
                  height: usize,
                  radius: usize) {
@@ -97,19 +97,19 @@ fn box_blur_pass(v_in: &mut Vec<f32>,
     box_blur_y(v_in, v_out, width, height, radius);
 }
 
-fn box_blur_x(v_in: &mut Vec<f32>,
-              v_out: &mut Vec<f32>,
+fn box_blur_x(v_in: &mut Vec<f64>,
+              v_out: &mut Vec<f64>,
               width: usize,
               height: usize,
               radius: usize) {
-    let factor = 1.0 / (radius + radius + 1) as f32;
+    let factor = 1.0 / (radius + radius + 1) as f64;
 
     let mut index: usize = 0;
     for _ in 0..height {
         let first_val = v_in[index];
         let last_val = v_in[index + width - 1];
         // we count values beyond the edges as equal to the edge value
-        let mut val = first_val * (radius + 1) as f32;
+        let mut val = first_val * (radius + 1) as f64;
         // Keep track of the left and right sides of the moving average
         let mut left_i = index;
         let mut right_i = index + radius;
@@ -142,19 +142,19 @@ fn box_blur_x(v_in: &mut Vec<f32>,
     }
 }
 
-fn box_blur_y(v_in: &mut Vec<f32>,
-              v_out: &mut Vec<f32>,
+fn box_blur_y(v_in: &mut Vec<f64>,
+              v_out: &mut Vec<f64>,
               width: usize,
               height: usize,
               radius: usize) {
-    let factor = 1.0 / (radius + radius + 1) as f32;
+    let factor = 1.0 / (radius + radius + 1) as f64;
 
     for x in 0..width {
         let mut index = x;
         let first_val = v_in[index];
         let last_val = v_in[index + (height - 1) * width];
         // we count values beyond the edges as equal to the edge value
-        let mut val = first_val * (radius + 1) as f32;
+        let mut val = first_val * (radius + 1) as f64;
         // Keep track of the "left"/top and "right"/bottom sides of the moving average
         let mut left_i = index;
         let mut right_i = index + radius * width;
@@ -187,22 +187,22 @@ fn box_blur_y(v_in: &mut Vec<f32>,
     }
 }
 
-fn box_blur_sizes(sigma: f32) -> [usize; 3] {
+fn box_blur_sizes(sigma: f64) -> [usize; 3] {
     let mut sizes: [usize; 3] = [0; 3];
     let num_passes = sizes.len();
 
-    let filter_width_ideal = f32::sqrt((12.0 * sigma * sigma / num_passes as f32) + 1.0);
+    let filter_width_ideal = f64::sqrt((12.0 * sigma * sigma / num_passes as f64) + 1.0);
     let mut width_low = filter_width_ideal as usize;
     if width_low % 2 == 0 {
         width_low -= 1; // must be odd
     }
     let width_high = width_low + 2;
 
-    let mean_ideal = (12.0 * sigma * sigma - (num_passes * width_low * width_low) as f32 -
-                      4.0 * (num_passes * width_low) as f32 -
-                      3.0 * num_passes as f32) /
-                     (-4.0 * width_low as f32 - 4.0);
-    let mean = f32::round(mean_ideal) as usize;
+    let mean_ideal = (12.0 * sigma * sigma - (num_passes * width_low * width_low) as f64 -
+                      4.0 * (num_passes * width_low) as f64 -
+                      3.0 * num_passes as f64) /
+                     (-4.0 * width_low as f64 - 4.0);
+    let mean = f64::round(mean_ideal) as usize;
     for i in 0..num_passes {
         sizes[i] = if i < mean { width_low } else { width_high };
     }
@@ -227,9 +227,9 @@ fn benchmark<F: FnMut()>(name: &str, mut f: F) -> f64 {
     return time_each;
 }
 
-fn find_local_maxima(in_img: &[f32], img_width: u32) -> Vec<(u32, u32, f32)> {
+fn find_local_maxima(in_img: &[f64], img_width: u32) -> Vec<(u32, u32, f64)> {
     let img_height = in_img.len() as u32 / img_width;
-    let mut local_maxima = Vec::<(u32, u32, f32)>::new();
+    let mut local_maxima = Vec::<(u32, u32, f64)>::new();
 
     for y in 1..img_height - 1 {
         'inner: for x in 1..(img_width - 1) {
@@ -258,7 +258,7 @@ fn find_local_maxima(in_img: &[f32], img_width: u32) -> Vec<(u32, u32, f32)> {
 
 }
 
-fn skin_threshold(input_img: DynamicImage, grey_buffer: &mut Vec<f32>) {
+fn skin_threshold(input_img: DynamicImage, grey_buffer: &mut Vec<f64>) {
     let (width, height) = input_img.dimensions();
     let len = (width * height) as usize;
     grey_buffer.reserve(len);
@@ -281,7 +281,7 @@ fn skin_threshold(input_img: DynamicImage, grey_buffer: &mut Vec<f32>) {
 }
 
 #[allow(dead_code)]
-fn write_grey_image(filename: &str, grey_img: &[f32], img_width: u32) {
+fn write_grey_image(filename: &str, grey_img: &[f64], img_width: u32) {
     let len = grey_img.len();
     let img_height = len as u32 / img_width;
     let mut u8_buffer = Vec::<u8>::with_capacity(len);
@@ -306,9 +306,9 @@ fn write_grey_image(filename: &str, grey_img: &[f32], img_width: u32) {
 
 fn draw_circles(maxima: &[(u32, u32)],
                 radius: u32,
-                in_img: &mut Vec<f32>,
+                in_img: &mut Vec<f64>,
                 img_width: u32,
-                grey_shade: f32) {
+                grey_shade: f64) {
     let height = in_img.len() / img_width as usize;
     let width = img_width as usize;
 
@@ -377,8 +377,7 @@ fn draw_circles(maxima: &[(u32, u32)],
 // Takes a vector  corresponding to the (x,y) coords
 // of the the centroid of a hand in some number of frames
 // and does a fourier analysis.
-fn freq_analyize(window: Vec<(u32,u32)> ){
-
+fn freq_analyze(window: Vec<(u32,u32)> ) -> u32 {
     let fft_len = window.len()-1;
     let mut fft = rustfft::FFT::new(fft_len, false);
     let mut signal = vec![num::Complex{re: 0.0, im: 0.0}; fft_len];
@@ -390,7 +389,7 @@ fn freq_analyize(window: Vec<(u32,u32)> ){
         let dx = x_2 as i32 - x_1 as i32;
         let dy = y_2 as i32 - y_1 as i32;
 
-        signal[i].re = (dx*dx + dy*dy) as f32;
+        signal[i].re = (dx*dx + dy*dy) as f64;
 
 
     }
@@ -420,9 +419,9 @@ fn freq_analyize(window: Vec<(u32,u32)> ){
     return max_i as u32;
 }
 
-fn compareHandFreqs(left_hand_window: Vec<(u32,u32)>, right_hand_window: Vec<(u32,u32)> ){
-    let left_hand_freq = freqAnalyze(left_hand_window);
-    let right_hand_freq = freqAnalyze(right_hand_window);
+fn compare_hand_freqs(left_hand_window: Vec<(u32,u32)>, right_hand_window: Vec<(u32,u32)> ){
+    let left_hand_freq = freq_analyze(left_hand_window);
+    let right_hand_freq = freq_analyze(right_hand_window);
 
     if left_hand_freq == right_hand_freq{
         println!("Both hands have the same Freq!")
@@ -432,12 +431,12 @@ fn compareHandFreqs(left_hand_window: Vec<(u32,u32)>, right_hand_window: Vec<(u3
 }
 
 // Returns tuple of image's width, height, and the maxima
-pub fn process_directory_for_maxima(path: &str, sigma: f64) -> (usize, usize, Vec<Vec<f32>>) {
-    let mut all_maxima = Vec::<Vec::<f32>>::new();
+pub fn process_directory_for_maxima(path: &str, sigma: f64) -> (usize, usize, Vec<Vec<(u32, u32, f64)>>) {
+    let mut all_maxima = Vec::<Vec<(u32, u32, f64)>>::new();
 
     // These vectors will be continually resused
-    let mut grey_buffer = Vec::<f32>::new();
-    let mut smooth_buffer = Vec::<f32>::new();
+    let mut grey_buffer = Vec::<f64>::new();
+    let mut smooth_buffer = Vec::<f64>::new();
 
     let mut width: usize = 0;
     let mut height: usize = 0;
@@ -449,18 +448,18 @@ pub fn process_directory_for_maxima(path: &str, sigma: f64) -> (usize, usize, Ve
         let (img_width, img_height) = input_img.dimensions();
 
         if width == 0 && height == 0 {
-            width = img_width;
-            height = img_height;
+            width = img_width as usize;
+            height = img_height as usize;
         } else {
-            assert!(width == img_width);
-            assert!(height == img_height);
+            assert!(width == img_width as usize);
+            assert!(height == img_height as usize);
         }
 
         skin_threshold(input_img, &mut grey_buffer);
-        diff_of_gaussians(sigma, 1.6, &mut grey_buffer, width, &mut smooth_buffer);
+        diff_of_gaussians(sigma, 1.6, &mut grey_buffer, width as u32, &mut smooth_buffer);
 
         // Find and label the top maxima in the diff o' g. image
-        let maxima = find_local_maxima(&mut smooth_buffer, width);
+        let maxima = find_local_maxima(&mut smooth_buffer, width as u32);
         all_maxima.push(maxima);
     }
 
@@ -476,8 +475,8 @@ fn process_directory(path: &str, baby_gui_skin: &mut Option<gui::BabyGui>, baby_
     let mut total_process_time = 0.0;
 
     // These vectors will be continually resused
-    let mut grey_buffer = Vec::<f32>::new();
-    let mut smooth_buffer = Vec::<f32>::new();
+    let mut grey_buffer = Vec::<f64>::new();
+    let mut smooth_buffer = Vec::<f64>::new();
 
     let mut i: u32 = 0;
     for img_path in glob(&format!("{}/*.jpg", path)).expect("Failed to read glob pattern") {
@@ -493,7 +492,7 @@ fn process_directory(path: &str, baby_gui_skin: &mut Option<gui::BabyGui>, baby_
 
         // Find and label the top maxima in the diff o' g. image
         let maxima = find_local_maxima(&mut smooth_buffer, width);
-        track_hands.add_maxima(width, height, &maxima);
+        track_hands.add_maxima(width, height, &maxima, &BEST_COEFFICIENTS);
 
         total_process_time += time::precise_time_s() - start;
 

@@ -83,7 +83,8 @@ impl HandTracking {
 
                 // only print out competitive-ish scores, to make debugging easier
                 if total_frame_score < 150.0 {
-                    println!("Frame score of hand pair at at (({}, {}), ({}, {})) is {} + {} + {} + {} + {} = {}", l_x, l_y, r_x, r_y, base_score, height_diff_score, sep_x_score, center_x_score, center_y_score, total_frame_score);
+                    println!("Frame score of hand pair at at (({}, {}), ({}, {})) is {} + {} + {} + {} + {} = {}",
+                             l_x, l_y, r_x, r_y, base_score, height_diff_score, sep_x_score, center_x_score, center_y_score, total_frame_score);
                 }
 
                 let mut tracking_score = 0.0;
@@ -127,4 +128,3 @@ impl HandTracking {
         self.right_hand_coords.push(best_right);
     }
 }
-

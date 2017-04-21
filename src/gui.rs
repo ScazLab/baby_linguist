@@ -56,7 +56,7 @@ impl BabyGui {
         }
     }
 
-    pub fn set_image(&mut self, grey_img: &[f32], width: u32) {
+    pub fn set_image(&mut self, grey_img: &[f64], width: u32) {
         let height = grey_img.len() as u32 / width;
 
         let len = (4 * width * height) as usize;
