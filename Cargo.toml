@@ -11,4 +11,3 @@ rustfft = "*"
 num = "*"
 glob = "*"
 conrod = { version = "*", features = ["glium", "winit"] }
-

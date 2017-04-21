@@ -17,6 +17,9 @@ use glob::glob;
 use image::GenericImage;
 use image::DynamicImage;
 
+pub const BEST_SIGMA: f64 = 4.0;
+pub const BEST_COEFFICIENTS: [f64; 9] = [200.0, 0.01, 0.01, 0.01, 0.01, 0.02, 0.02, 0.02, 0.02];
+
 
 fn rgb_to_yuv(r: u8, g: u8, b: u8) -> (u8, u8, u8) {
     let (rf, gf, bf) = (r as f32, g as f32, b as f32);
@@ -393,22 +396,65 @@ fn freq_analyize(window: Vec<(u32,u32)> ){
     }
     let mut spectrum = signal.clone();
     fft.process(&signal, &mut spectrum);
+    println!("Freq spectrum: {:?}\n",spectrum);
+
+    let mut max_i = 0;
+    let mut max_mag = 0.0;
+
+    for i in 1..spectrum.len(){
+        let re = spectrum[i as usize].re;
+        let im = spectrum[i as usize].im;
+        let curr_mag = re*re + im*im ;
+
+        if curr_mag> max_mag{
+            max_mag = curr_mag;
+            max_i = i;
+        }
+    }
+    // Place holder value. We need to account for the fact
+    // that the baby may not be moving its hand
+    if max_mag < 1000.0{
+        max_i = 0
+    }
+    println!("Max frequency is {}!\n",max_i);
+    return max_i as u32;
+}
+
+fn compareHandFreqs(left_hand_window: Vec<(u32,u32)>, right_hand_window: Vec<(u32,u32)> ){
+    let left_hand_freq = freqAnalyze(left_hand_window);
+    let right_hand_freq = freqAnalyze(right_hand_window);
+
+    if left_hand_freq == right_hand_freq{
+        println!("Both hands have the same Freq!")
+    }
 
     println!("Freq spectrum: {:?}\n", spectrum);
 }
 
-pub fn process_directory_for_maxima(path: &str, sigma: f32) -> Vec<Vec<f32>> {
+// Returns tuple of image's width, height, and the maxima
+pub fn process_directory_for_maxima(path: &str, sigma: f64) -> (usize, usize, Vec<Vec<f32>>) {
     let mut all_maxima = Vec::<Vec::<f32>>::new();
 
     // These vectors will be continually resused
     let mut grey_buffer = Vec::<f32>::new();
     let mut smooth_buffer = Vec::<f32>::new();
 
+    let mut width: usize = 0;
+    let mut height: usize = 0;
+
     for img_path in glob(&format!("{}/*.jpg", path)).expect("Failed to read glob pattern") {
         let img_path = img_path.unwrap();
         println!("Processing image: {:?}", &img_path);
         let input_img = image::open(&img_path).unwrap();
-        let (width, height) = input_img.dimensions();
+        let (img_width, img_height) = input_img.dimensions();
+
+        if width == 0 && height == 0 {
+            width = img_width;
+            height = img_height;
+        } else {
+            assert!(width == img_width);
+            assert!(height == img_height);
+        }
 
         skin_threshold(input_img, &mut grey_buffer);
         diff_of_gaussians(sigma, 1.6, &mut grey_buffer, width, &mut smooth_buffer);
@@ -418,7 +464,7 @@ pub fn process_directory_for_maxima(path: &str, sigma: f32) -> Vec<Vec<f32>> {
         all_maxima.push(maxima);
     }
 
-    return all_maxima;
+    return (width, height, all_maxima);
 }
 
 fn process_directory(path: &str, baby_gui_skin: &mut Option<gui::BabyGui>, baby_gui_hands: &mut Option<gui::BabyGui>) {
