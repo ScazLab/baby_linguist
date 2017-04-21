@@ -40,8 +40,8 @@ fn calc_gradient<F>(func: F, coeffs: &[f64]) -> Vec<f64>
     let mut grad = Vec::with_capacity(coeff_len);
 
     for i in 0..coeff_len {
-        let x_prev = coeffs.clone();
-        let x_post = coeffs.clone();
+        let mut x_prev = coeffs.clone();
+        let mut x_post = coeffs.clone();
 
         x_prev[i] -= h;
         x_post[i] += h;
@@ -99,7 +99,7 @@ fn gradient_optimize<F>(func: F, init_coeffs: &[f64]) -> Vec<f64>
         grad = calc_gradient(func, &return_coeffs[..]);
 
         // is the norm of the grad sufficiently small?
-        let grad_norm = 0.0;
+        let mut grad_norm = 0.0;
         for i in grad {
             grad_norm += i * i;
         }
