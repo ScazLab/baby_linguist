@@ -40,8 +40,8 @@ fn calc_gradient<F>(func: &F, coeffs: &[f64]) -> Vec<f64>
     let mut grad = Vec::with_capacity(coeff_len);
 
     for i in 0..coeff_len {
-        let x_prev = coeffs.clone();
-        let x_post = coeffs.clone();
+        let mut x_prev = coeffs.clone();
+        let mut x_post = coeffs.clone();
 
         x_prev[i] -= h;
         x_post[i] += h;
