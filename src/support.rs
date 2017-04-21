@@ -14,7 +14,6 @@ pub struct EventLoop {
 }
 
 impl EventLoop {
-
     pub fn new() -> Self {
         EventLoop {
             last_update: std::time::Instant::now(),

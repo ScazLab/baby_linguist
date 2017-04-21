@@ -39,16 +39,17 @@ impl BabyGui {
                 let ids = Ids::new(ui.widget_id_generator());
 
                 Some(BabyGui {
-                    display: display,
-                    ui: ui,
-                    renderer: renderer,
-                    ids: ids,
-                    event_loop: support::EventLoop::new(),
-                    image_map: conrod::image::Map::new(),
-                    display_id: None,
-                    width: 0.,
-                    height: 0.,
-                })},
+                         display: display,
+                         ui: ui,
+                         renderer: renderer,
+                         ids: ids,
+                         event_loop: support::EventLoop::new(),
+                         image_map: conrod::image::Map::new(),
+                         display_id: None,
+                         width: 0.,
+                         height: 0.,
+                     })
+            }
             Err(e) => {
                 println!("Unable to make window: {:?}", e);
                 None
@@ -75,7 +76,8 @@ impl BabyGui {
             out_i += 4;
         }
 
-        let raw_image = glium::texture::RawImage2d::from_raw_rgba_reversed(img_buffer, (width, height));
+        let raw_image = glium::texture::RawImage2d::from_raw_rgba_reversed(img_buffer,
+                                                                           (width, height));
         let texture = glium::texture::Texture2d::new(&self.display, raw_image).unwrap();
 
         if let Some(display_id) = self.display_id {
@@ -105,7 +107,7 @@ impl BabyGui {
                 glium::glutin::Event::KeyboardInput(_, _, Some(glium::glutin::VirtualKeyCode::Q)) |
                 glium::glutin::Event::Closed =>
                     std::process::exit(0),
-                _ => {},
+                _ => {}
             }
         }
 
@@ -114,7 +116,10 @@ impl BabyGui {
             let widgets_ui = &mut self.ui.set_widgets();
             if let Some(display_id) = self.display_id {
                 // Instantiate the `Image` at its full size in the middle of the window.
-                widget::Image::new(display_id).w_h(self.width, self.height).middle().set(self.ids.display_image, widgets_ui);
+                widget::Image::new(display_id)
+                    .w_h(self.width, self.height)
+                    .middle()
+                    .set(self.ids.display_image, widgets_ui);
             }
         }
 

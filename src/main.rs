@@ -3,7 +3,8 @@ extern crate time;
 extern crate rustfft;
 extern crate num;
 extern crate glob;
-#[macro_use] extern crate conrod;
+#[macro_use]
+extern crate conrod;
 
 mod support;
 mod tracking;
@@ -377,53 +378,53 @@ fn draw_circles(maxima: &[(u32, u32)],
 // Takes a vector  corresponding to the (x,y) coords
 // of the the centroid of a hand in some number of frames
 // and does a fourier analysis.
-fn freq_analyze(window: Vec<(u32,u32)> ) -> u32 {
-    let fft_len = window.len()-1;
+fn freq_analyze(window: Vec<(u32, u32)>) -> u32 {
+    let fft_len = window.len() - 1;
     let mut fft = rustfft::FFT::new(fft_len, false);
     let mut signal = vec![num::Complex{re: 0.0, im: 0.0}; fft_len];
 
-    for i in 0..fft_len{
-        let (x_1,y_1) = window[i];
-        let (x_2, y_2) = window[i+1];
+    for i in 0..fft_len {
+        let (x_1, y_1) = window[i];
+        let (x_2, y_2) = window[i + 1];
 
         let dx = x_2 as i32 - x_1 as i32;
         let dy = y_2 as i32 - y_1 as i32;
 
-        signal[i].re = (dx*dx + dy*dy) as f64;
+        signal[i].re = (dx * dx + dy * dy) as f64;
 
 
     }
     let mut spectrum = signal.clone();
     fft.process(&signal, &mut spectrum);
-    println!("Freq spectrum: {:?}\n",spectrum);
+    println!("Freq spectrum: {:?}\n", spectrum);
 
     let mut max_i = 0;
     let mut max_mag = 0.0;
 
-    for i in 1..spectrum.len(){
+    for i in 1..spectrum.len() {
         let re = spectrum[i as usize].re;
         let im = spectrum[i as usize].im;
-        let curr_mag = re*re + im*im ;
+        let curr_mag = re * re + im * im;
 
-        if curr_mag> max_mag{
+        if curr_mag > max_mag {
             max_mag = curr_mag;
             max_i = i;
         }
     }
     // Place holder value. We need to account for the fact
     // that the baby may not be moving its hand
-    if max_mag < 1000.0{
+    if max_mag < 1000.0 {
         max_i = 0
     }
-    println!("Max frequency is {}!\n",max_i);
+    println!("Max frequency is {}!\n", max_i);
     return max_i as u32;
 }
 
-fn compare_hand_freqs(left_hand_window: Vec<(u32,u32)>, right_hand_window: Vec<(u32,u32)> ){
+fn compare_hand_freqs(left_hand_window: Vec<(u32, u32)>, right_hand_window: Vec<(u32, u32)>) {
     let left_hand_freq = freq_analyze(left_hand_window);
     let right_hand_freq = freq_analyze(right_hand_window);
 
-    if left_hand_freq == right_hand_freq{
+    if left_hand_freq == right_hand_freq {
         println!("Both hands have the same Freq!")
     }
 
@@ -432,7 +433,9 @@ fn compare_hand_freqs(left_hand_window: Vec<(u32,u32)>, right_hand_window: Vec<(
 }
 
 // Returns tuple of image's width, height, and the maxima
-pub fn process_directory_for_maxima(path: &str, sigma: f64) -> (usize, usize, Vec<Vec<(u32, u32, f64)>>) {
+pub fn process_directory_for_maxima(path: &str,
+                                    sigma: f64)
+                                    -> (usize, usize, Vec<Vec<(u32, u32, f64)>>) {
     let mut all_maxima = Vec::<Vec<(u32, u32, f64)>>::new();
 
     // These vectors will be continually resused
@@ -457,7 +460,11 @@ pub fn process_directory_for_maxima(path: &str, sigma: f64) -> (usize, usize, Ve
         }
 
         skin_threshold(input_img, &mut grey_buffer);
-        diff_of_gaussians(sigma, 1.6, &mut grey_buffer, width as u32, &mut smooth_buffer);
+        diff_of_gaussians(sigma,
+                          1.6,
+                          &mut grey_buffer,
+                          width as u32,
+                          &mut smooth_buffer);
 
         // Find and label the top maxima in the diff o' g. image
         let maxima = find_local_maxima(&mut smooth_buffer, width as u32);
@@ -467,7 +474,9 @@ pub fn process_directory_for_maxima(path: &str, sigma: f64) -> (usize, usize, Ve
     return (width, height, all_maxima);
 }
 
-fn process_directory(path: &str, baby_gui_skin: &mut Option<gui::BabyGui>, baby_gui_hands: &mut Option<gui::BabyGui>) {
+fn process_directory(path: &str,
+                     baby_gui_skin: &mut Option<gui::BabyGui>,
+                     baby_gui_hands: &mut Option<gui::BabyGui>) {
     // Parameters
     let sigma = 4.0;
 
@@ -500,11 +509,21 @@ fn process_directory(path: &str, baby_gui_skin: &mut Option<gui::BabyGui>, baby_
         // Draw all found points
         let feature_radius = (1.414 * sigma) as u32;
         let all_hand_points: Vec<(u32, u32)> = maxima.into_iter().map(|(x, y, _)| (x, y)).collect();
-        draw_circles(&all_hand_points, feature_radius, &mut smooth_buffer, width, 0.4);
+        draw_circles(&all_hand_points,
+                     feature_radius,
+                     &mut smooth_buffer,
+                     width,
+                     0.4);
 
         if track_hands.left_hand_coords.len() > 0 {
-            let hand_points = vec![track_hands.left_hand_coords.last().unwrap().clone(),
-                                   track_hands.right_hand_coords.last().unwrap().clone()];
+            let hand_points = vec![track_hands.left_hand_coords
+                                       .last()
+                                       .unwrap()
+                                       .clone(),
+                                   track_hands.right_hand_coords
+                                       .last()
+                                       .unwrap()
+                                       .clone()];
             draw_circles(&hand_points, feature_radius, &mut smooth_buffer, width, 1.0);
         }
 
@@ -524,7 +543,10 @@ fn process_directory(path: &str, baby_gui_skin: &mut Option<gui::BabyGui>, baby_
         i += 1;
     }
 
-    println!("Done! Processing {} frames took: {:.4} seconds per frame ({:.2} FPS)", i, total_process_time / i as f64, i as f64 / total_process_time);
+    println!("Done! Processing {} frames took: {:.4} seconds per frame ({:.2} FPS)",
+             i,
+             total_process_time / i as f64,
+             i as f64 / total_process_time);
 }
 
 fn main() {
@@ -539,7 +561,6 @@ fn main() {
     process_directory(&args[1], &mut baby_gui_skin, &mut baby_gui_hands);
 
     if let (Some(mut gui_skin), Some(mut gui_hands)) = (baby_gui_skin, baby_gui_hands) {
-        while gui_skin.handle_events() && gui_hands.handle_events() {
-        }
+        while gui_skin.handle_events() && gui_hands.handle_events() {}
     }
 }
