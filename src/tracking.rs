@@ -36,6 +36,13 @@ fn linear_interp_next(vals: &[(u32, u32)]) -> (u32, u32) {
         sum_denom_y += diff_y * diff_y;
     }
 
+    if sum_denom_x == 0 {
+        sum_denom_x = 1;
+    }
+    if sum_denom_y == 0 {
+        sum_denom_y = 1;
+    }
+
     let slope_x = sum_numer_x / sum_denom_x;
     let slope_y = sum_numer_y / sum_denom_y;
     let &(last_x, last_y) = vals.last().unwrap();
@@ -90,7 +97,7 @@ impl HandTracking {
                     base_score + height_diff_score + sep_x_score + center_x_score + center_y_score;
 
                 // only print out competitive-ish scores, to make debugging easier
-                if total_frame_score < 150.0 {
+                /*if total_frame_score < 150.0 {
                     println!("Frame score of hand pair at at (({}, {}), ({}, {})) is {} + {} + {} + {} + {} = {}",
                              l_x,
                              l_y,
@@ -102,15 +109,15 @@ impl HandTracking {
                              center_x_score,
                              center_y_score,
                              total_frame_score);
-                }
+                }*/
 
                 let mut tracking_score = 0.0;
 
                 // Predict the location from the past points
                 let n = self.left_hand_coords.len();
                 if n > PREDICTION_POINTS {
-                    let (pred_left_x, pred_left_y) = linear_interp_next(&self.left_hand_coords[n - PREDICTION_POINTS..
-                                                                         n]);
+                    let (pred_left_x, pred_left_y) =
+                        linear_interp_next(&self.left_hand_coords[n - PREDICTION_POINTS..n]);
                     let (pred_right_x, pred_right_y) =
                         linear_interp_next(&self.right_hand_coords[n - PREDICTION_POINTS..n]);
                     let (pred_left_x, pred_left_y) = (pred_left_x as f64, pred_left_y as f64);
@@ -124,14 +131,14 @@ impl HandTracking {
                     tracking_score = err_left_x + err_left_y + err_right_x + err_right_y;
 
                     // only print out competitive-ish scores, to make debugging easier
-                    if total_frame_score < 150.0 {
+                    /*if total_frame_score < 150.0 {
                         println!("\tTracking score is {} + {} + {} + {} = {}",
                                  err_left_x,
                                  err_left_y,
                                  err_right_x,
                                  err_right_y,
                                  tracking_score);
-                    }
+                    }*/
                 }
 
                 let total_score = total_frame_score + tracking_score;
@@ -144,12 +151,12 @@ impl HandTracking {
             }
         }
 
-        println!("Choose hand pair at (({}, {}), ({}, {})) with score of {}",
+        /*println!("Choose hand pair at (({}, {}), ({}, {})) with score of {}",
                  best_left.0,
                  best_left.1,
                  best_right.0,
                  best_right.1,
-                 best_score);
+                 best_score);*/
 
         self.left_hand_coords.push(best_left);
         self.right_hand_coords.push(best_right);

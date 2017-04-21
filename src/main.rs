@@ -556,11 +556,13 @@ fn main() {
         return;
     }
 
-    let mut baby_gui_skin = gui::BabyGui::new();
+    println!("Best hand coefs: {:?}", optimize::optimize_tracking_coefficients(&args[1]));
+
+    /*let mut baby_gui_skin = gui::BabyGui::new();
     let mut baby_gui_hands = gui::BabyGui::new();
     process_directory(&args[1], &mut baby_gui_skin, &mut baby_gui_hands);
 
     if let (Some(mut gui_skin), Some(mut gui_hands)) = (baby_gui_skin, baby_gui_hands) {
         while gui_skin.handle_events() && gui_hands.handle_events() {}
-    }
+    }*/
 }
