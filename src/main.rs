@@ -427,6 +427,7 @@ fn compare_hand_freqs(left_hand_window: Vec<(u32,u32)>, right_hand_window: Vec<(
         println!("Both hands have the same Freq!")
     }
 
+    let spectrum = 0.0;
     println!("Freq spectrum: {:?}\n", spectrum);
 }
 

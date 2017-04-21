@@ -18,23 +18,23 @@ fn evaluate_tracker(handtracker: ::tracking::HandTracking) -> f64 {
 }
 
 fn sigma_evaluation(path: &str, params: &[f64]) -> f64 {
-    let (width, height, all_maxima) = process_directory_for_maxima(path, params[0]);
+    let (width, height, all_maxima) = ::process_directory_for_maxima(path, params[0]);
     let mut track_hands = ::tracking::HandTracking::new();
     for maxima in all_maxima {
-        track_hands.add_maxima(width, height, &maxima, BEST_COEFFICIENTS);
+        track_hands.add_maxima(width as u32, height as u32, &maxima, &::BEST_COEFFICIENTS);
     }
     return evaluate_tracker(track_hands);
 }
 
 fn optimize_sigma(path: &str) -> f64 {
-    return gradient_optimize(|params| sigma_evaluation(path, params), &[BEST_SIGMA])[0];
+    return gradient_optimize(|params| sigma_evaluation(path, params), &[::BEST_SIGMA])[0];
 }
 
 fn calc_gradient<F>(func: F, coeffs: &[f64]) -> Vec<f64>
     where F: Fn(&[f64]) -> f64
 {
     // First calculate numerical gradient
-    let h = 10.pow(-11) as f64;
+    let h = 1e-11;
     let coeff_len = coeffs.len();
 
     let mut grad = Vec::with_capacity(coeff_len);
@@ -62,22 +62,21 @@ fn gradient_optimize<F>(func: F, init_coeffs: &[f64]) -> Vec<f64>
     let alpha = 0.2;
     let beta = 0.5;
     let mut t = 1.0;
-    let eps = 10.pow(-2);
+    let eps = 1e-2;
     let coeff_len = init_coeffs.len();
-    let mut return_coeffs = init_coeffs.clone();
+    let mut return_coeffs: Vec<f64> = vec![0.0; init_coeffs.len()];
+    return_coeffs.clone_from_slice(init_coeffs);
 
     // Exit this loop when our grad is sufficiently small
-    while true {
-
-        let mut grad = calc_gradient(func, return_coeffs);
+    loop {
+        let mut grad = calc_gradient(func, &return_coeffs[..]);
 
         // Perform backtracking line search to calculate t
         let mut x_new = return_coeffs.clone();
         let mut f_plus_grad = func(&return_coeffs[..]);
         let mut keep_looping = true;
 
-        while true {
-
+        loop {
             for i in 0..coeff_len {
                 x_new[i] += t * grad[i];
                 f_plus_grad += alpha * t * (-grad[i]) * grad[i];
