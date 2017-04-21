@@ -30,12 +30,6 @@ fn optimize_sigma(path: &str) {
     return gradient_optimize(|params| sigma_evaluation(path, params), &[BEST_SIGMA])[0];
 }
 
-fn gradient_optimize(func: F, init_coeffs: &[f64]) -> Vec<f64> {
-    let mut v: Vec<f64> = Vec::new();
-    v.extend_from_slice(init_coeffs);
-    return v;
-}
-
 fn calc_gradient(func:F, coeffs: &[f64])->Vec<f64>
     where F: Fn(&[f64])-> f64{
     // First calculate numerical gradient
