@@ -27,10 +27,10 @@ fn sigma_evaluation(path: &str, params: &[f64]) -> f64 {
 }
 
 fn optimize_sigma(path: &str) -> f64 {
-    return gradient_optimize(|params| sigma_evaluation(path, params), &[::BEST_SIGMA])[0];
+    return gradient_optimize(&|params| sigma_evaluation(path, params), &[::BEST_SIGMA])[0];
 }
 
-fn calc_gradient<F>(func: F, coeffs: &[f64]) -> Vec<f64>
+fn calc_gradient<F>(func: &F, coeffs: &[f64]) -> Vec<f64>
     where F: Fn(&[f64]) -> f64
 {
     // First calculate numerical gradient
@@ -55,7 +55,7 @@ fn calc_gradient<F>(func: F, coeffs: &[f64]) -> Vec<f64>
     return grad;
 }
 
-fn gradient_optimize<F>(func: F, init_coeffs: &[f64]) -> Vec<f64>
+fn gradient_optimize<F>(func: &F, init_coeffs: &[f64]) -> Vec<f64>
     where F: Fn(&[f64]) -> f64
 {
 
@@ -99,7 +99,7 @@ fn gradient_optimize<F>(func: F, init_coeffs: &[f64]) -> Vec<f64>
         grad = calc_gradient(func, &return_coeffs[..]);
 
         // is the norm of the grad sufficiently small?
-        let grad_norm = 0.0;
+        let mut grad_norm = 0.0;
         for i in grad {
             grad_norm += i * i;
         }
