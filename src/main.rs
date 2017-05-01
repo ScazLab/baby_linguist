@@ -18,7 +18,7 @@ use glob::glob;
 use image::GenericImage;
 use image::DynamicImage;
 
-pub const BEST_SIGMA: f64 = 4.0;
+pub const BEST_SIGMA: f64 = 3.8;
 pub const BEST_COEFFICIENTS: [f64; 9] = [200.0, 0.01, 0.01, 0.01, 0.01, 0.02, 0.02, 0.02, 0.02];
 
 
@@ -103,6 +103,8 @@ fn box_blur_x(v_in: &mut Vec<f64>,
               width: usize,
               height: usize,
               radius: usize) {
+    assert!(width >= radius);
+
     let factor = 1.0 / (radius + radius + 1) as f64;
 
     let mut index: usize = 0;
@@ -148,6 +150,8 @@ fn box_blur_y(v_in: &mut Vec<f64>,
               width: usize,
               height: usize,
               radius: usize) {
+    assert!(width >= radius);
+
     let factor = 1.0 / (radius + radius + 1) as f64;
 
     for x in 0..width {
@@ -447,7 +451,7 @@ pub fn process_directory_for_maxima(path: &str,
 
     for img_path in glob(&format!("{}/*.jpg", path)).expect("Failed to read glob pattern") {
         let img_path = img_path.unwrap();
-        println!("Processing image: {:?}", &img_path);
+        //println!("Processing image: {:?}", &img_path);
         let input_img = image::open(&img_path).unwrap();
         let (img_width, img_height) = input_img.dimensions();
 
@@ -556,7 +560,7 @@ fn main() {
         return;
     }
 
-    println!("Best hand coefs: {:?}", optimize::optimize_tracking_coefficients(&args[1]));
+    println!("Best hand coefs: {:?}", optimize::optimize_sigma(&args[1]));
 
     /*let mut baby_gui_skin = gui::BabyGui::new();
     let mut baby_gui_hands = gui::BabyGui::new();
