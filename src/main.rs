@@ -1,5 +1,6 @@
 extern crate image;
 extern crate time;
+extern crate rscam;
 extern crate rustfft;
 extern crate num;
 extern crate glob;
@@ -18,8 +19,17 @@ use glob::glob;
 use image::GenericImage;
 use image::DynamicImage;
 
+use rustfft::num_complex::Complex;
+use rustfft::num_traits::Zero;
+
+use std::io::prelude::*;
+
 pub const BEST_SIGMA: f64 = 3.8;
-pub const BEST_COEFFICIENTS: [f64; 9] = [200.0, 0.01, 0.01, 0.01, 0.01, 0.02, 0.02, 0.02, 0.02];
+//pub const BEST_COEFFICIENTS: [f64; 6] = [286.0, 0.11, 0.01, 0.11, 0.1099, 3.27];
+pub const BEST_COEFFICIENTS: [f64; 6] = [286.0, 0.11, 0.01, 0.11, 0.1099, 3.27];
+
+
+pub const SEARCH_RANGE: [f64;6] = [100.0, 5.0, 5.0, 5.0, 5.0, 5.0];
 
 
 fn rgb_to_yuv(r: u8, g: u8, b: u8) -> (u8, u8, u8) {
@@ -384,8 +394,8 @@ fn draw_circles(maxima: &[(u32, u32)],
 // and does a fourier analysis.
 fn freq_analyze(window: Vec<(u32, u32)>) -> u32 {
     let fft_len = window.len() - 1;
-    let mut fft = rustfft::FFT::new(fft_len, false);
-    let mut signal = vec![num::Complex{re: 0.0, im: 0.0}; fft_len];
+    let  fft = rustfft::FFTplanner::new(false).plan_fft(fft_len);
+    let mut signal: Vec<Complex<f64>> = vec![Zero::zero(); fft_len];
 
     for i in 0..fft_len {
         let (x_1, y_1) = window[i];
@@ -399,7 +409,7 @@ fn freq_analyze(window: Vec<(u32, u32)>) -> u32 {
 
     }
     let mut spectrum = signal.clone();
-    fft.process(&signal, &mut spectrum);
+    fft.process(&mut signal, &mut spectrum);
     println!("Freq spectrum: {:?}\n", spectrum);
 
     let mut max_i = 0;
@@ -451,7 +461,7 @@ pub fn process_directory_for_maxima(path: &str,
 
     for img_path in glob(&format!("{}/*.jpg", path)).expect("Failed to read glob pattern") {
         let img_path = img_path.unwrap();
-        //println!("Processing image: {:?}", &img_path);
+        println!("Processing image: {:?}", &img_path);
         let input_img = image::open(&img_path).unwrap();
         let (img_width, img_height) = input_img.dimensions();
 
@@ -542,16 +552,146 @@ fn process_directory(path: &str,
             gui_hands.set_image(&smooth_buffer, width);
             gui_hands.handle_events();
         }
-        //write_grey_image(&format!("./video/DoG{}.png", i), &smooth_buffer[..], width);
+        //NOTE: UNCOMMENT AND MODIFY THIS IF YOU WANT TO SAVE OUTPUT
+        //write_grey_image(&format!("./video_best_coeffs/DoG{}.jpg", i), &smooth_buffer[..], width);
 
         i += 1;
     }
 
+    
     println!("Done! Processing {} frames took: {:.4} seconds per frame ({:.2} FPS)",
              i,
              total_process_time / i as f64,
              i as f64 / total_process_time);
 }
+
+fn process_live_video_stream(baby_gui_skin: &mut Option<gui::BabyGui>,
+                             baby_gui_hands: &mut Option<gui::BabyGui>,
+                             recording: bool,
+                             save_dir: &str){
+
+    // Parameters
+    let sigma = 4.0;
+
+    
+    let mut track_hands = tracking::HandTracking::new();
+    
+
+    let mut total_process_time = 0.0;
+
+    // These vectors will be continually resused
+    let mut grey_buffer = Vec::<f64>::new();
+    let mut smooth_buffer = Vec::<f64>::new();
+
+
+    let mut camera = rscam::Camera::new("/dev/video0")
+        .expect("Failed to open camera, is it plugged in?");
+
+    // Uncomment this if you need to know
+    // formats of camera being used
+
+    // println!("CAMERA FORMATS");
+    // for f in camera.formats(){
+    //     println!("{:?}",f);
+    // }
+
+    camera.start(&rscam::Config {
+        interval: (1, 30),      // 30 fps.
+        resolution: (640, 480),
+        format: b"RGB3",
+        ..Default::default()
+    }).expect("Cannot start camera, are you using a valid format?");
+
+    let mut i: u32 = 0;
+
+    loop {
+
+        println!("Processing frame {}", i);
+        let frame = match camera.capture(){
+            Err(e) => panic!("Unable to capture frame!"),
+            Ok(n) => n,
+        };
+
+        //Make the tmp dir if it doesnt already exist
+        std::fs::create_dir_all(format!("{}",save_dir))
+            .expect("Cannot make dir!");
+
+        let img_path = format!("{}frame-{}.jpg",save_dir, i);
+
+        // create a temporary image of frame and write data
+        // to it
+        image::save_buffer(&Path::new(&img_path),&frame[..],
+                           640,480,image::RGB(8)).expect("Save Error!");
+        // let mut file = std::fs::File::create(&img_path).unwrap();
+        // file.write_all(&frame[..]).unwrap();
+
+        let input_img = image::open(&Path::new(&img_path)).expect(
+            "Failed to open img! Check path");
+        let (width, height) = input_img.dimensions();
+
+        let start = time::precise_time_s();
+
+        skin_threshold(input_img, &mut grey_buffer);
+        diff_of_gaussians(sigma, 1.6, &mut grey_buffer,
+                          width, &mut smooth_buffer);
+
+        // Find and label the top maxima in the diff o' g. image
+        let maxima = find_local_maxima(&mut smooth_buffer, width);
+        track_hands.add_maxima(width, height, &maxima, &BEST_COEFFICIENTS);
+
+        total_process_time += time::precise_time_s() - start;
+
+        // Draw all found points
+        let feature_radius = (1.414 * sigma) as u32;
+        let all_hand_points: Vec<(u32, u32)> =
+            maxima.into_iter().map(|(x, y, _)| (x, y)).collect();
+
+        draw_circles(&all_hand_points,
+                     feature_radius,
+                     &mut smooth_buffer,
+                     width,
+                     0.4);
+
+        if track_hands.left_hand_coords.len() > 0 {
+            let hand_points = vec![track_hands.left_hand_coords
+                                       .last()
+                                       .unwrap()
+                                       .clone(),
+                                   track_hands.right_hand_coords
+                                       .last()
+                                       .unwrap()
+                                       .clone()];
+            draw_circles(&hand_points, feature_radius,
+                         &mut smooth_buffer, width, 1.0);
+        }
+
+        //draw_circles(&maxima[0..cmp::min(4, maxima.len())],
+        //feature_radius, &mut smooth_buffer, width);
+
+        if let &mut Some(ref mut gui_skin) = baby_gui_skin {
+            gui_skin.set_image(&grey_buffer, width);
+            gui_skin.handle_events();
+        }
+
+        if let &mut Some(ref mut gui_hands) = baby_gui_hands {
+            gui_hands.set_image(&smooth_buffer, width);
+            gui_hands.handle_events();
+        }
+        //NOTE: UNCOMMENT AND MODIFY THIS IF YOU WANT TO SAVE OUTPUT
+        // write_grey_image(&format!("./video_best_coeffs/DoG{}.jpg", i),
+        //                  &smooth_buffer[..], width);
+
+        i += 1;
+
+        // Save webcam frames if so desired. 
+        if !recording{
+            std::fs::remove_file(img_path).unwrap();
+        }
+        
+
+    }
+}
+
 
 fn main() {
     let args: Vec<_> = std::env::args().collect();
@@ -560,13 +700,18 @@ fn main() {
         return;
     }
 
-    println!("Best hand coefs: {:?}", optimize::optimize_sigma(&args[1]));
+ 
+    // println!("Best hand coefs: {:?}",
+    //          optimize::optimize_tracking_coefficients(&args[1]));
 
-    /*let mut baby_gui_skin = gui::BabyGui::new();
+    let mut baby_gui_skin = gui::BabyGui::new();
     let mut baby_gui_hands = gui::BabyGui::new();
-    process_directory(&args[1], &mut baby_gui_skin, &mut baby_gui_hands);
+    //process_directory(&args[1], &mut baby_gui_skin, &mut baby_gui_hands);
+    process_live_video_stream(&mut baby_gui_skin, &mut baby_gui_hands,
+                              false, "../tmp_webcam/");
 
-    if let (Some(mut gui_skin), Some(mut gui_hands)) = (baby_gui_skin, baby_gui_hands) {
-        while gui_skin.handle_events() && gui_hands.handle_events() {}
-    }*/
+    if let (Some(mut gui_skin), Some(mut gui_hands)) =
+        (baby_gui_skin, baby_gui_hands) {
+            while gui_skin.handle_events() && gui_hands.handle_events() {}
+    }
 }

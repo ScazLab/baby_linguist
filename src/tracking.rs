@@ -1,9 +1,11 @@
+use std::f64;
 
-const PREDICTION_POINTS: usize = 20;
+const PREDICTION_POINTS: usize = 10;
 
 pub struct HandTracking {
     pub left_hand_coords: Vec<(u32, u32)>,
     pub right_hand_coords: Vec<(u32, u32)>,
+    pub scores: Vec<f64>,
 }
 
 // From https://en.wikipedia.org/wiki/Simple_linear_regression
@@ -54,6 +56,7 @@ impl HandTracking {
         HandTracking {
             left_hand_coords: Vec::<(u32, u32)>::new(),
             right_hand_coords: Vec::<(u32, u32)>::new(),
+            scores: Vec::<f64>::new(),
         }
     }
 
@@ -61,7 +64,7 @@ impl HandTracking {
                       width: u32,
                       height: u32,
                       maxima: &Vec<(u32, u32, f64)>,
-                      coeffs: &[f64; 9]) {
+                      coeffs: &[f64; 6]) {
         let mut maxima_by_x = maxima.clone();
         maxima_by_x.sort_by(|&(a, _, _), &(b, _, _)| a.partial_cmp(&b).unwrap());
 
@@ -71,7 +74,11 @@ impl HandTracking {
         // Look for values closish to image center
         let mut best_left: (u32, u32) = (0, 0);
         let mut best_right: (u32, u32) = (0, 0);
-        let mut best_score: f64 = 0.0;
+        // let mut best_score: f64 =
+        //     if self.scores.len() == 0 {f64::MAX}
+        //     else {self.scores[self.scores.len() - 1]};
+        let mut n = 0;
+        let mut best_score: f64 = f64::MAX;
 
         for left_i in 0..maxima_by_x.len() {
             for right_i in left_i + 1..maxima_by_x.len() {
@@ -87,7 +94,7 @@ impl HandTracking {
                 let height_diff_score = coeffs[1] * (l_y as f64 - r_y as f64).powi(2);
                 // They should be separated in x by some amount
                 let sep_x_score = coeffs[2] *
-                                  ((l_x as f64 - r_x as f64).abs() - width as f64 * 0.3).powi(2);
+                                  ((l_x as f64 - r_x as f64).abs() - width as f64 * 0.8).powi(2);
                 // The center of the two hands should be near the center of the image
                 let center_x_score = coeffs[3] *
                                      ((l_x + r_x) as f64 / 2.0 - width as f64 * 0.5).powi(2);
@@ -114,22 +121,26 @@ impl HandTracking {
                 let mut tracking_score = 0.0;
 
                 // Predict the location from the past points
-                let n = self.left_hand_coords.len();
+                n = self.left_hand_coords.len();
                 if n > PREDICTION_POINTS {
                     let (pred_left_x, pred_left_y) =
-                        linear_interp_next(&self.left_hand_coords[n - PREDICTION_POINTS..n]);
+                        linear_interp_next(&self.left_hand_coords[(n - PREDICTION_POINTS)..n]);
                     let (pred_right_x, pred_right_y) =
-                        linear_interp_next(&self.right_hand_coords[n - PREDICTION_POINTS..n]);
+                        linear_interp_next(&self.right_hand_coords[(n - PREDICTION_POINTS)..n]);
                     let (pred_left_x, pred_left_y) = (pred_left_x as f64, pred_left_y as f64);
                     let (pred_right_x, pred_right_y) = (pred_right_x as f64, pred_right_y as f64);
 
                     let err_left_x = coeffs[5] * (pred_left_x - l_x as f64).powi(2);
-                    let err_left_y = coeffs[6] * (pred_left_y - l_y as f64).powi(2);
-                    let err_right_x = coeffs[7] * (pred_right_x - r_x as f64).powi(2);
-                    let err_right_y = coeffs[8] * (pred_right_y - r_y as f64).powi(2);
+                    let err_left_y = coeffs[5] * (pred_left_y - l_y as f64).powi(2);
+                    let err_right_x = coeffs[5] * (pred_right_x - r_x as f64).powi(2);
+                    let err_right_y = coeffs[5] * (pred_right_y - r_y as f64).powi(2);
 
                     tracking_score = err_left_x + err_left_y + err_right_x + err_right_y;
 
+                    // println!("Current left coords: ({},{}), right coords({},{})", l_x, l_y,
+                    //          r_x, r_y);
+                    // println!("Predicted left coords: ({},{}), right coords({},{})",pred_left_x, pred_left_y,
+                    //          pred_right_x, pred_right_y);
                     // only print out competitive-ish scores, to make debugging easier
                     /*if total_frame_score < 150.0 {
                         println!("\tTracking score is {} + {} + {} + {} = {}",
@@ -143,7 +154,7 @@ impl HandTracking {
 
                 let total_score = total_frame_score + tracking_score;
 
-                if best_score == 0.0 || total_score < best_score {
+                if total_score < best_score {
                     best_score = total_score;
                     best_left = (l_x, l_y);
                     best_right = (r_x, r_y);
@@ -151,14 +162,29 @@ impl HandTracking {
             }
         }
 
-        /*println!("Choose hand pair at (({}, {}), ({}, {})) with score of {}",
+        // If there is a big discrepancy in two successive scores
+        // then likely the "correct" blob(s) momentarily disappeared
+        // so then we should use the previously known good blob instead
+        if n > 0 {
+            let prev_best =  self.scores[n - 1];
+            let score_diff = best_score - prev_best;
+
+            if score_diff.abs() > prev_best * 3.0 {
+                best_left = self.left_hand_coords[n - 1];
+                best_right = self.right_hand_coords[n - 1];
+                best_score = self.scores[n - 1];
+                println!("Score diff {}",score_diff);
+            }
+        }
+        println!("Choose hand pair at (({}, {}), ({}, {})) with score of {}",
                  best_left.0,
                  best_left.1,
                  best_right.0,
                  best_right.1,
-                 best_score);*/
+                 best_score);
 
         self.left_hand_coords.push(best_left);
         self.right_hand_coords.push(best_right);
+        self.scores.push(best_score);
     }
 }
