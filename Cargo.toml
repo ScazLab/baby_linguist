@@ -5,6 +5,7 @@ authors = [ "Acshi Haggenmiller <acshikh@gmail.com>", "Jake Brawer <jake.brawer@
 
 [dependencies]
 image = "*"
+find_folder = "*"
 rscam = "*"
 time = "*"
 rustfft = "*"

@@ -1,5 +1,6 @@
 extern crate image;
 extern crate time;
+extern crate find_folder;
 extern crate rscam;
 extern crate rustfft;
 extern crate num;
@@ -31,6 +32,7 @@ pub const BEST_COEFFICIENTS: [f64; 6] = [286.0, 0.11, 0.01, 0.11, 0.1099, 3.27];
 
 pub const SEARCH_RANGE: [f64;6] = [100.0, 5.0, 5.0, 5.0, 5.0, 5.0];
 
+pub const WIN_SIZE: usize = 120;
 
 fn rgb_to_yuv(r: u8, g: u8, b: u8) -> (u8, u8, u8) {
     let (rf, gf, bf) = (r as f32, g as f32, b as f32);
@@ -392,7 +394,7 @@ fn draw_circles(maxima: &[(u32, u32)],
 // Takes a vector  corresponding to the (x,y) coords
 // of the the centroid of a hand in some number of frames
 // and does a fourier analysis.
-fn freq_analyze(window: Vec<(u32, u32)>) -> u32 {
+fn freq_analyze(window: &[(u32, u32); WIN_SIZE]) -> u32 {
     let fft_len = window.len() - 1;
     let  fft = rustfft::FFTplanner::new(false).plan_fft(fft_len);
     let mut signal: Vec<Complex<f64>> = vec![Zero::zero(); fft_len];
@@ -410,7 +412,7 @@ fn freq_analyze(window: Vec<(u32, u32)>) -> u32 {
     }
     let mut spectrum = signal.clone();
     fft.process(&mut signal, &mut spectrum);
-    println!("Freq spectrum: {:?}\n", spectrum);
+    //println!("Freq spectrum: {:?}\n", spectrum);
 
     let mut max_i = 0;
     let mut max_mag = 0.0;
@@ -430,20 +432,40 @@ fn freq_analyze(window: Vec<(u32, u32)>) -> u32 {
     if max_mag < 1000.0 {
         max_i = 0
     }
-    println!("Max frequency is {}!\n", max_i);
+    //println!("Max frequency is {}!\n", max_i);
     return max_i as u32;
 }
 
-fn compare_hand_freqs(left_hand_window: Vec<(u32, u32)>, right_hand_window: Vec<(u32, u32)>) {
-    let left_hand_freq = freq_analyze(left_hand_window);
-    let right_hand_freq = freq_analyze(right_hand_window);
+fn compare_hand_freqs(left_hand_window: &[(u32, u32)],
+                      right_hand_window: &[(u32, u32)])-> (String,String) {
 
-    if left_hand_freq == right_hand_freq {
-        println!("Both hands have the same Freq!")
+    let hand_len = left_hand_window.len();
+
+    let mut left_slice: [(u32,u32); WIN_SIZE ] = [(0,0); WIN_SIZE];
+    let mut right_slice: [(u32,u32); WIN_SIZE] = [(0,0); WIN_SIZE];
+
+    let mut left_hand_freq;
+    let mut right_hand_freq;
+
+    match hand_len > WIN_SIZE{
+        true => {
+            left_slice
+                .clone_from_slice(&left_hand_window[hand_len - WIN_SIZE..]);
+            right_slice
+                .clone_from_slice(&right_hand_window[hand_len - WIN_SIZE..]);
+
+            left_hand_freq = freq_analyze(&left_slice) as f32/ 30.;
+            right_hand_freq = freq_analyze(&right_slice) as f32 / 30.;
+
+            return (left_hand_freq.to_string(),
+                    right_hand_freq.to_string())
+        }
+
+        false  => {
+            println!("Can't analyze freq! Need more frames!");
+            return ("N/A".to_string(), "N/A".to_string());
+        }
     }
-
-    let spectrum = 0.0;
-    println!("Freq spectrum: {:?}\n", spectrum);
 }
 
 // Returns tuple of image's width, height, and the maxima
@@ -551,6 +573,7 @@ fn process_directory(path: &str,
         if let &mut Some(ref mut gui_hands) = baby_gui_hands {
             gui_hands.set_image(&smooth_buffer, width);
             gui_hands.handle_events();
+
         }
         //NOTE: UNCOMMENT AND MODIFY THIS IF YOU WANT TO SAVE OUTPUT
         //write_grey_image(&format!("./video_best_coeffs/DoG{}.jpg", i), &smooth_buffer[..], width);
@@ -568,7 +591,7 @@ fn process_directory(path: &str,
 fn process_live_video_stream(baby_gui_skin: &mut Option<gui::BabyGui>,
                              baby_gui_hands: &mut Option<gui::BabyGui>,
                              recording: bool,
-                             save_dir: &str){
+                             save_dir: &str,){
 
     // Parameters
     let sigma = 4.0;
@@ -604,6 +627,7 @@ fn process_live_video_stream(baby_gui_skin: &mut Option<gui::BabyGui>,
 
     let mut i: u32 = 0;
 
+
     loop {
 
         println!("Processing frame {}", i);
@@ -613,10 +637,13 @@ fn process_live_video_stream(baby_gui_skin: &mut Option<gui::BabyGui>,
         };
 
         //Make the tmp dir if it doesnt already exist
-        std::fs::create_dir_all(format!("{}",save_dir))
+        std::fs::create_dir_all(format!("{}raw/",save_dir))
             .expect("Cannot make dir!");
+        std::fs::create_dir_all(format!("{}DoG",save_dir))
+            .unwrap();
+        
 
-        let img_path = format!("{}frame-{}.jpg",save_dir, i);
+        let img_path = format!("{}raw/frame-{}.jpg",save_dir, i);
 
         // create a temporary image of frame and write data
         // to it
@@ -673,13 +700,18 @@ fn process_live_video_stream(baby_gui_skin: &mut Option<gui::BabyGui>,
             gui_skin.handle_events();
         }
 
+        let freqs = compare_hand_freqs(&track_hands.left_hand_coords,
+                                       &track_hands.right_hand_coords);
+
+        let left_str = format!("Left Freq: {:.3}Hz",freqs.0);
+        let right_str = format!("Right Freq: {:.3}Hz",freqs.1);
+
         if let &mut Some(ref mut gui_hands) = baby_gui_hands {
             gui_hands.set_image(&smooth_buffer, width);
             gui_hands.handle_events();
+
+            gui_hands.set_text(&left_str, &right_str);
         }
-        //NOTE: UNCOMMENT AND MODIFY THIS IF YOU WANT TO SAVE OUTPUT
-        // write_grey_image(&format!("./video_best_coeffs/DoG{}.jpg", i),
-        //                  &smooth_buffer[..], width);
 
         i += 1;
 
@@ -687,20 +719,23 @@ fn process_live_video_stream(baby_gui_skin: &mut Option<gui::BabyGui>,
         if !recording{
             std::fs::remove_file(img_path).unwrap();
         }
-        
-
+        else{
+            write_grey_image(&format!("{}DoG/frame-{}.jpg",save_dir, i),
+                             &smooth_buffer[..], width);
+        }
     }
 }
 
 
 fn main() {
     let args: Vec<_> = std::env::args().collect();
+
+
     if args.len() != 2 {
         println!("Usage: {} [image directory]", &args[0]);
         return;
     }
 
- 
     // println!("Best hand coefs: {:?}",
     //          optimize::optimize_tracking_coefficients(&args[1]));
 

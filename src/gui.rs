@@ -144,15 +144,7 @@ impl BabyGui {
             //     .color(color::BLUE)
             //     .set(self.ids.text,widgets_ui);
 
-            widget::text_edit::TextEdit::new(&format!("{}\n{}",
-                                                      &self.left_freq,
-                                                      &self.right_freq))
-                .color(color::WHITE)
-                .font_size(12)
-                .bottom_left_of(self.ids.master)
-                .set(self.ids.left_txt, widgets_ui);
 
-            println!("MAX LEFT FREQ: {:?}",&self.left_freq);
 
             if let Some(display_id) = self.display_id {
                 // Instantiate the `Image` at its full size in the middle of the window.
@@ -161,6 +153,14 @@ impl BabyGui {
                     .top_left_of(self.ids.master)
                     .set(self.ids.display_image, widgets_ui);
 
+
+                widget::text_edit::TextEdit::new(&format!("{}\n{}",
+                                                          &self.left_freq,
+                                                          &self.right_freq))
+                    .color(color::WHITE)
+                    .font_size(12)
+                    .bottom_right_of(self.ids.display_image)
+                    .set(self.ids.left_txt, widgets_ui);
             }
 
         }
