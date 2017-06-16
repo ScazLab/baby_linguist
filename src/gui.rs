@@ -1,16 +1,17 @@
 use support;
 use std;
 
-use conrod::{self, widget, Sizeable, Positionable, Widget};
+use conrod::{self, color, widget, Sizeable, Positionable, Widget, Colorable};
 use conrod::backend::glium::glium;
 use conrod::backend::glium::glium::{DisplayBuild, Surface};
+use conrod::widget::primitive::text;
 
 const WIDTH: u32 = 650;
 const HEIGHT: u32 = 490;
 
-widget_ids!(struct Ids { display_image });
+widget_ids!(struct Ids { master,main, text,display_image, left_txt, right_txt });
 
-pub struct BabyGui {
+pub struct BabyGui{
     display: glium::backend::glutin_backend::GlutinFacade,
     ui: conrod::Ui,
     renderer: conrod::backend::glium::Renderer,
@@ -22,6 +23,9 @@ pub struct BabyGui {
 
     width: f64,
     height: f64,
+
+    left_freq: String,
+    right_freq: String,
 }
 
 impl BabyGui {
@@ -39,15 +43,17 @@ impl BabyGui {
                 let ids = Ids::new(ui.widget_id_generator());
 
                 Some(BabyGui {
-                         display: display,
-                         ui: ui,
-                         renderer: renderer,
-                         ids: ids,
-                         event_loop: support::EventLoop::new(),
-                         image_map: conrod::image::Map::new(),
-                         display_id: None,
-                         width: 0.,
-                         height: 0.,
+                    display: display,
+                    ui: ui,
+                    renderer: renderer,
+                    ids: ids,
+                    event_loop: support::EventLoop::new(),
+                    image_map: conrod::image::Map::new(),
+                    display_id: None,
+                    width: 0.,
+                    height: 0.,
+                    left_freq: "Left Freq: ".to_string(),
+                    right_freq: "Right Freq: ".to_string(),
                      })
             }
             Err(e) => {
@@ -92,8 +98,20 @@ impl BabyGui {
         self.height = height as f64;
     }
 
+    pub fn set_text(&mut self, left_freq: &str, right_freq: &str ){
+
+        self.left_freq = left_freq.to_string();
+        self.right_freq  = right_freq.to_string();
+
+        //self.event_loop.needs_update();
+        self.ui.needs_redraw();
+
+    }
     // Returns true as long as the program should not quit
     pub fn handle_events(&mut self) -> bool {
+        let font_path = "/usr/share/fonts/ttf-merriweather-ib/Merriweather-Black.ttf";
+        self.ui.fonts .insert_from_file(font_path).unwrap();
+
         for event in self.event_loop.next(&self.display) {
             // Use the `winit` backend feature to convert the winit event to a conrod one,
             // to handle resizing and redrawing events
@@ -114,13 +132,37 @@ impl BabyGui {
         // Use an extra block so the mutable reference to self.ui is released
         {
             let widgets_ui = &mut self.ui.set_widgets();
+
+            widget::Canvas::new()
+                .color(color::BLACK)
+                .w_h(self.width,self.height)
+                .set(self.ids.master, widgets_ui);
+
+            // widget::Canvas::new()
+            //     .top_left_of(self.ids.master)
+            //     .w_h(100.,50.)
+            //     .color(color::BLUE)
+            //     .set(self.ids.text,widgets_ui);
+
+            widget::text_edit::TextEdit::new(&format!("{}\n{}",
+                                                      &self.left_freq,
+                                                      &self.right_freq))
+                .color(color::WHITE)
+                .font_size(12)
+                .bottom_left_of(self.ids.master)
+                .set(self.ids.left_txt, widgets_ui);
+
+            println!("MAX LEFT FREQ: {:?}",&self.left_freq);
+
             if let Some(display_id) = self.display_id {
                 // Instantiate the `Image` at its full size in the middle of the window.
                 widget::Image::new(display_id)
                     .w_h(self.width, self.height)
-                    .middle()
+                    .top_left_of(self.ids.master)
                     .set(self.ids.display_image, widgets_ui);
+
             }
+
         }
 
         // Render the `Ui` and then display it on the screen.
