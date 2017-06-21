@@ -176,15 +176,16 @@ impl HandTracking {
                 println!("Score diff {}",score_diff);
             }
         }
-        println!("Choose hand pair at (({}, {}), ({}, {})) with score of {}",
-                 best_left.0,
-                 best_left.1,
-                 best_right.0,
-                 best_right.1,
-                 best_score);
+        // println!("Choose hand pair at (({}, {}), ({}, {})) with score of {}",
+        //          best_left.0,
+        //          best_left.1,
+        //          best_right.0,
+        //          best_right.1,
+        //          best_score);
 
         self.left_hand_coords.push(best_left);
         self.right_hand_coords.push(best_right);
         self.scores.push(best_score);
     }
 }
+

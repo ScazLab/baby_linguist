@@ -25,7 +25,8 @@ use rustfft::num_traits::Zero;
 
 use std::io::prelude::*;
 
-pub const BEST_SIGMA: f64 = 3.8;
+pub const BEST_SIGMA: f64 = 12.8; //3.8
+pub const FEATURE_RADIUS: f64 = 1.414 * BEST_SIGMA;
 //pub const BEST_COEFFICIENTS: [f64; 6] = [286.0, 0.11, 0.01, 0.11, 0.1099, 3.27];
 pub const BEST_COEFFICIENTS: [f64; 6] = [286.0, 0.11, 0.01, 0.11, 0.1099, 3.27];
 
@@ -514,7 +515,7 @@ fn process_directory(path: &str,
                      baby_gui_skin: &mut Option<gui::BabyGui>,
                      baby_gui_hands: &mut Option<gui::BabyGui>) {
     // Parameters
-    let sigma = 4.0;
+    let sigma = BEST_SIGMA;
 
     let mut track_hands = tracking::HandTracking::new();
 
@@ -543,7 +544,7 @@ fn process_directory(path: &str,
         total_process_time += time::precise_time_s() - start;
 
         // Draw all found points
-        let feature_radius = (1.414 * sigma) as u32;
+        let feature_radius = FEATURE_RADIUS as u32;
         let all_hand_points: Vec<(u32, u32)> = maxima.into_iter().map(|(x, y, _)| (x, y)).collect();
         draw_circles(&all_hand_points,
                      feature_radius,
@@ -551,27 +552,36 @@ fn process_directory(path: &str,
                      width,
                      0.4);
 
-        if track_hands.left_hand_coords.len() > 0 {
-            let hand_points = vec![track_hands.left_hand_coords
-                                       .last()
-                                       .unwrap()
-                                       .clone(),
-                                   track_hands.right_hand_coords
-                                       .last()
-                                       .unwrap()
-                                       .clone()];
-            draw_circles(&hand_points, feature_radius, &mut smooth_buffer, width, 1.0);
-        }
+        let hand_points = vec![track_hands.left_hand_coords
+                               .last()
+                               .unwrap()
+                               .clone(),
+                               track_hands.right_hand_coords
+                               .last()
+                               .unwrap()
+                               .clone()];
+
+        // if track_hands.left_hand_coords.len() > 0 {
+        //     draw_circles(&hand_points,
+        //                  feature_radius,
+        //                  &mut smooth_buffer,
+        //                  width,
+        //                  1.0);
+        // }
 
         //draw_circles(&maxima[0..cmp::min(4, maxima.len())], feature_radius, &mut smooth_buffer, width);
 
         if let &mut Some(ref mut gui_skin) = baby_gui_skin {
-            gui_skin.set_image(&grey_buffer, width);
+            gui_skin.set_image(&grey_buffer, width,
+                                hand_points[0].clone(),
+                                hand_points[1].clone());
             gui_skin.handle_events();
         }
 
         if let &mut Some(ref mut gui_hands) = baby_gui_hands {
-            gui_hands.set_image(&smooth_buffer, width);
+            gui_hands.set_image(&smooth_buffer, width,
+                               hand_points[0].clone(),
+                               hand_points[1].clone());
             gui_hands.handle_events();
 
         }
@@ -594,11 +604,9 @@ fn process_live_video_stream(baby_gui_skin: &mut Option<gui::BabyGui>,
                              save_dir: &str,){
 
     // Parameters
-    let sigma = 4.0;
+    let sigma = BEST_SIGMA;
 
-    
     let mut track_hands = tracking::HandTracking::new();
-    
 
     let mut total_process_time = 0.0;
 
@@ -668,8 +676,8 @@ fn process_live_video_stream(baby_gui_skin: &mut Option<gui::BabyGui>,
 
         total_process_time += time::precise_time_s() - start;
 
+        let feature_radius = FEATURE_RADIUS as u32;
         // Draw all found points
-        let feature_radius = (1.414 * sigma) as u32;
         let all_hand_points: Vec<(u32, u32)> =
             maxima.into_iter().map(|(x, y, _)| (x, y)).collect();
 
@@ -679,26 +687,29 @@ fn process_live_video_stream(baby_gui_skin: &mut Option<gui::BabyGui>,
                      width,
                      0.4);
 
-        if track_hands.left_hand_coords.len() > 0 {
-            let hand_points = vec![track_hands.left_hand_coords
-                                       .last()
-                                       .unwrap()
-                                       .clone(),
-                                   track_hands.right_hand_coords
-                                       .last()
-                                       .unwrap()
-                                       .clone()];
-            draw_circles(&hand_points, feature_radius,
-                         &mut smooth_buffer, width, 1.0);
-        }
+        let hand_points = vec![track_hands.left_hand_coords
+                               .last()
+                               .unwrap()
+                               .clone(),
+                               track_hands.right_hand_coords
+                               .last()
+                               .unwrap()
+                               .clone()];
+
+        // if track_hands.left_hand_coords.len() > 0 {
+        //     draw_circles(&hand_points, feature_radius,
+        //                  &mut smooth_buffer, width, 1.0);
+        // }
 
         //draw_circles(&maxima[0..cmp::min(4, maxima.len())],
         //feature_radius, &mut smooth_buffer, width);
 
-        if let &mut Some(ref mut gui_skin) = baby_gui_skin {
-            gui_skin.set_image(&grey_buffer, width);
-            gui_skin.handle_events();
-        }
+        // if let &mut Some(ref mut gui_skin) = baby_gui_skin {
+        //     gui_skin.set_image(&grey_buffer, width,
+        //                        hand_points[0].clone(),
+        //                        hand_points[1].clone());
+        //     gui_skin.handle_events();
+        // }
 
         let freqs = compare_hand_freqs(&track_hands.left_hand_coords,
                                        &track_hands.right_hand_coords);
@@ -707,7 +718,10 @@ fn process_live_video_stream(baby_gui_skin: &mut Option<gui::BabyGui>,
         let right_str = format!("Right Freq: {:.3}Hz",freqs.1);
 
         if let &mut Some(ref mut gui_hands) = baby_gui_hands {
-            gui_hands.set_image(&smooth_buffer, width);
+            gui_hands.set_image(&smooth_buffer, width,
+                                hand_points[0].clone(),
+                                hand_points[1].clone(),
+                                );
             gui_hands.handle_events();
 
             gui_hands.set_text(&left_str, &right_str);
@@ -721,7 +735,7 @@ fn process_live_video_stream(baby_gui_skin: &mut Option<gui::BabyGui>,
         }
         else{
             write_grey_image(&format!("{}DoG/frame-{}.jpg",save_dir, i),
-                             &smooth_buffer[..], width);
+                             &grey_buffer[..], width);
         }
     }
 }
@@ -736,6 +750,12 @@ fn main() {
         return;
     }
 
+    let time = time::now();
+    println!("{}-{}-{}",
+             time.tm_mday,
+             time.tm_mon,
+             time.tm_year);
+    let date = format!("{}-{}-{}", time.tm_mday, time.tm_mon, time.tm_year);
     // println!("Best hand coefs: {:?}",
     //          optimize::optimize_tracking_coefficients(&args[1]));
 
@@ -743,7 +763,7 @@ fn main() {
     let mut baby_gui_hands = gui::BabyGui::new();
     //process_directory(&args[1], &mut baby_gui_skin, &mut baby_gui_hands);
     process_live_video_stream(&mut baby_gui_skin, &mut baby_gui_hands,
-                              false, "../tmp_webcam/");
+                              true, &format!("../{}_tmp_webcam/",date));
 
     if let (Some(mut gui_skin), Some(mut gui_hands)) =
         (baby_gui_skin, baby_gui_hands) {
