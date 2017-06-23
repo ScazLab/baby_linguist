@@ -49,7 +49,7 @@ impl BabyGui {
 
                 //let font_path = "/usr/share/fonts/ttf-merriweather-ib/Merriweather-Black.ttf";
                 // chooses a random font from system to use
-                let mut fonty  = ::glob("/usr/share/fonts/ttf-*/*ttf").expect("Cant read glob pattern");
+                let mut fonty  = ::glob("/usr/share/fonts/**/ttf-*/*ttf").expect("Cant read glob pattern");
                 let font_path = &fonty.next().expect("No fonts found!").unwrap();
 
                 ui.fonts.insert_from_file(font_path).expect("Error! Check the font path");
