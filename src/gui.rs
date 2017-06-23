@@ -4,7 +4,6 @@ use std;
 use conrod::{self, color, widget, Sizeable, Positionable, Widget, Colorable};
 use conrod::backend::glium::glium;
 use conrod::backend::glium::glium::{DisplayBuild, Surface};
-use conrod::widget::primitive::text;
 
 const WIDTH: u32 = 640;
 const HEIGHT: u32 = 480;
@@ -47,6 +46,13 @@ impl BabyGui {
                 let mut ui = conrod::UiBuilder::new([WIDTH as f64, HEIGHT as f64]).build();
                 let renderer = conrod::backend::glium::Renderer::new(&display).unwrap();
                 let ids = Ids::new(ui.widget_id_generator());
+
+                //let font_path = "/usr/share/fonts/ttf-merriweather-ib/Merriweather-Black.ttf";
+                // chooses a random font from system to use
+                let mut fonty  = ::glob("/usr/share/fonts/ttf-*/*ttf").expect("Cant read glob pattern");
+                let font_path = &fonty.next().expect("No fonts found!").unwrap();
+
+                ui.fonts.insert_from_file(font_path).expect("Error! Check the font path");
 
                 Some(BabyGui {
                     display: display,
@@ -122,8 +128,6 @@ impl BabyGui {
     }
     // Returns true as long as the program should not quit
     pub fn handle_events(&mut self) -> bool {
-        let font_path = "/usr/share/fonts/ttf-merriweather-ib/Merriweather-Black.ttf";
-        self.ui.fonts .insert_from_file(font_path).expect("Error! Check the font path");
 
         for event in self.event_loop.next(&self.display) {
             // Use the `winit` backend feature to convert the winit event to a conrod one,

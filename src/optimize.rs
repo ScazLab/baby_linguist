@@ -20,8 +20,8 @@ fn evaluate_tracker(handtracker: ::tracking::HandTracking) -> (f64,f64) {
         let d_l = (l_prev.0 as i32 - l_next.0 as i32, l_prev.1 as i32 - l_next.1 as i32);
         let d_r = (r_prev.0 as i32 - r_next.0 as i32, r_prev.1 as i32 - r_next.1 as i32);
 
-        sum_least_sqrs_l += (d_l.0 * d_l.0 + d_l.1 * d_l.1);
-        sum_least_sqrs_r += (d_r.0 * d_r.0 + d_r.1 * d_r.1);
+        sum_least_sqrs_l += d_l.0 * d_l.0 + d_l.1 * d_l.1;
+        sum_least_sqrs_r += d_r.0 * d_r.0 + d_r.1 * d_r.1;
     }
 
     return (sum_least_sqrs_l as f64, sum_least_sqrs_r as f64);
@@ -128,7 +128,7 @@ fn grid_search<F>(func: &F, init_coeffs: &[f64], input_range: &[f64],
             let step_size = input_range[i] / num_steps as f64;
 
             for j in -(num_steps as i32)..(num_steps as i32) + 1{
-                if(j == 0){
+                if j == 0{
                     continue;
                 }
                 let mut x_new = return_coeffs.to_vec();
