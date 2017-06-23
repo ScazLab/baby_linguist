@@ -614,8 +614,14 @@ fn process_live_video_stream(baby_gui_skin: &mut Option<gui::BabyGui>,
     let mut grey_buffer = Vec::<f64>::new();
     let mut smooth_buffer = Vec::<f64>::new();
 
-
-    let mut camera = rscam::Camera::new("/dev/video0")
+    // This will always select an external cam, even if the system as a built
+    // in one.
+    let cam_path = glob("/dev/video*").expect("No camera found!");
+    let mut camera = rscam::Camera::new(cam_path.last()
+                                        .unwrap()
+                                        .unwrap()
+                                        .to_str()
+                                        .unwrap())
         .expect("Failed to open camera, is it plugged in?");
 
     // Uncomment this if you need to know
